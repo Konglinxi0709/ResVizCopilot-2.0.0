@@ -52,22 +52,6 @@ ResVizCopilot 2.0 是一个科研智能体项目，集成了研究树数据库�
 pip install -r backend/requirements.txt
 ```
 
-### 环境配置
-项目支持通过环境变量进行配置，可以创建 `.env` 文件或设置系统环境变量：
-
-1. **复制示例配置文件**：
-```bash
-cp backend/env.example backend/.env
-```
-
-2. **编辑配置文件**，设置必要的参数：
-   - `DEEPSEEK_API_KEY`: 你的DeepSeek API密钥
-   - `DEEPSEEK_BASE_URL`: DeepSeek API基础URL
-   - 代理配置（可选）：
-     - `HTTP_PROXY`: HTTP代理地址
-     - `HTTPS_PROXY`: HTTPS代理地址
-     - `NO_PROXY`: 不使用代理的地址列表
-
 ### 启动服务
 ```bash
 export PYTHONPATH=/path/to/ResVizCopilot-2.0.0:$PYTHONPATH
@@ -215,30 +199,6 @@ backend/
 - 通过测试文件验证功能完整性
 - 检查数据持久化是否正确
 - 验证错误处理机制
-
-## 代理配置
-
-### 配置代理
-如果你的网络环境需要通过代理访问外网，可以在 `.env` 文件中配置代理：
-
-```bash
-# HTTP代理
-HTTP_PROXY=http://proxy.example.com:8080
-
-# HTTPS代理  
-HTTPS_PROXY=http://proxy.example.com:8080
-
-# 不使用代理的地址（可选）
-NO_PROXY=localhost,127.0.0.1
-```
-
-代理配置会自动应用到所有LLM API调用中。
-
-### 代理配置示例
-- **HTTP代理**: `HTTP_PROXY=http://192.168.1.100:8080`
-- **HTTPS代理**: `HTTPS_PROXY=http://192.168.1.100:8080`
-- **认证代理**: `HTTPS_PROXY=http://username:password@proxy.example.com:8080`
-- **排除本地地址**: `NO_PROXY=localhost,127.0.0.1,192.168.1.0/24`
 
 ## 常见问题
 

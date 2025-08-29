@@ -8,7 +8,7 @@ from uuid import uuid4
 import json
 from datetime import datetime
 
-from backend.message.schemas.message_models import Message, Patch, FrontendPatch, FrontendMessage
+from backend.message.schemas.message_models import Message, Patch, FrontendPatch
 from backend.database.database_manager import DatabaseManager
 from backend.utils.logger import log_multiline_text, logger
 
@@ -297,15 +297,6 @@ class MessageManager:
         
         return frontend_patch
 
-    def _process_message_for_frontend(self, message: Message) -> FrontendMessage:
-        """
-        处理消息以供前端使用（替换snapshot_id为snapshot对象）
-        """
-        snapshot_obj = None
-        if message.snapshot_id:
-            snapshot_obj = self.get_database_snapshot(message.snapshot_id)
-        return FrontendMessage.from_message(message, snapshot_obj)
-    
     async def subscribe_patches(self) -> AsyncGenerator[FrontendPatch, None]:
         """
         订阅补丁更新
@@ -341,7 +332,7 @@ class MessageManager:
         Returns:
             按创建顺序排序的消息列表
         """
-        message_history = [self._process_message_for_frontend(self.messages[msg_id]) for msg_id in self.message_order if msg_id in self.messages]
+        message_history = [self.messages[msg_id] for msg_id in self.message_order if msg_id in self.messages]
         return message_history
     
     def get_incomplete_message(self) -> Optional[Message]:

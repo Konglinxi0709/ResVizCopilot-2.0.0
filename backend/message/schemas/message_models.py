@@ -114,25 +114,6 @@ class Patch(BaseModel):
         # 更新时间戳
         message.update_timestamp()
 
-class FrontendMessage(Message):
-    """
-    发送到前端的消息模型
-    
-    扩展功能：
-    - 包含snapshot对象用于前端数据库更新
-    """
-    snapshot: Optional[Dict[str, Any]] = Field(default=None, description="快照对象（替换snapshot_id）")
-
-    @classmethod
-    def from_message(cls, message: Message, snapshot_obj: Optional[Dict[str, Any]] = None) -> "FrontendMessage":
-        """
-        从基础Message创建FrontendMessage
-        """
-        frontend_message = cls(**message.model_dump())
-        if snapshot_obj:
-            frontend_message.snapshot = snapshot_obj
-        return frontend_message
-
 class FrontendPatch(Patch):
     """
     发送到前端的补丁模型

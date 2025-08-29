@@ -356,10 +356,12 @@ class DatabaseManager:
         return self._commit(new_roots)
 
     @query_decorator
-    def get_current_snapshot_query(self) -> Dict:
-        """获取当前快照查询"""
-        snapshot = self.get_current_snapshot()
-        return snapshot.model_dump()
+    def get_snapshot_query(self, snapshot_id: str) -> Dict:
+        """获取指定快照查询"""
+        snapshot = self.snapshot_map.get(snapshot_id)
+        if snapshot:
+            return snapshot.model_dump()
+        return {"error": "Snapshot not found"}
 
     @query_decorator
     def get_compact_text_tree_query(self) -> Dict:

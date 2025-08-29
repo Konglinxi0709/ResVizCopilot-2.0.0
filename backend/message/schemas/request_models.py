@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
-from backend.message.schemas.message_models import FrontendMessage
+from backend.message.schemas.message_models import Message
 
 
 # 请求响应模型
@@ -14,7 +14,7 @@ class SendMessageRequest(BaseModel):
 
 class MessageHistoryResponse(BaseModel):
     """消息历史响应"""
-    messages: list[FrontendMessage] = Field(description="消息列表")
+    messages: list[Message] = Field(description="消息列表")
     incomplete_message_id: Optional[str] = Field(default=None, description="未完成消息ID")
 
 

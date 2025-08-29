@@ -18,9 +18,12 @@ from typing import Dict, Any, List, Optional
 import requests
 from sseclient import SSEClient
 import uuid
+
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 base_url = "http://127.0.0.1:8008"
+public_session = requests.Session()
+public_session.trust_env = False
 
 class StreamMessageClient:
     """流式消息客户端"""
@@ -28,14 +31,69 @@ class StreamMessageClient:
     def __init__(self):
         self.messages: List[Dict[str, Any]] = []
         self.current_project_name: str = "未命名"  # 当前工程名称
+        self.current_snapshot: Dict[str, Any] = {}
+
+    def get_snapshot_by_id(self, snapshot_id: str):
+        """
+        根据快照ID获取快照内容，并打印主要结构信息，便于调试和验证。
+
+        Args:
+            snapshot_id (str): 快照ID
+
+        Returns:
+            dict: 快照的完整数据（如果获取成功），否则返回空字典
+        """
+        try:
+            resp = public_session.get(f"{base_url}/research-tree/snapshots/{snapshot_id}")
+            if resp.status_code == 200:
+                data = resp.json().get("data", {})
+                return data
+            else:
+                print(f"❌ 获取快照失败: HTTP {resp.status_code}")
+                return {}
+        except Exception as e:
+            print(f"❌ 获取快照时出错: {e}")
+            return {}
+
+    def get_current_snapshot_id(self):
+        """更新当前快照"""
+        for msg in self.messages[::-1]:
+            snapshot_id = msg.get("snapshot_id")
+            if snapshot_id:
+                return snapshot_id
+        return {}
 
     def get_current_snapshot(self):
         """更新当前快照"""
-        for msg in self.messages[::-1]:
-            snapshot = msg.get("snapshot", {})
-            if snapshot:
-                return snapshot.get("data", {})
+        snapshot_id = self.get_current_snapshot_id()
+        if self.current_snapshot.get("id") == snapshot_id:
+            return self.current_snapshot
+        if snapshot_id:
+            return self.get_snapshot_by_id(snapshot_id)
         return {}
+
+    def get_snapshot_id_by_message_index(self, message_index: int) -> Optional[str]:
+        """
+        根据消息编号获取对应的snapshot_id
+        如果该消息没有snapshot_id，则向前回溯找到最近的存在snapshot_id的消息
+        
+        Args:
+            message_index (int): 消息编号（从1开始）
+            
+        Returns:
+            Optional[str]: 找到的snapshot_id，如果没有找到则返回None
+        """
+        if message_index < 1 or message_index > len(self.messages):
+            return None
+            
+        # 从指定消息开始向前查找
+        for i in range(message_index - 1, -1, -1):
+            msg = self.messages[i]
+            snapshot_id = msg.get("snapshot_id")
+            if snapshot_id:
+                return snapshot_id
+                
+        return None
 
     def get_all_solution_titles(self):
         """递归遍历所有解决方案节点，获取标题"""
@@ -138,11 +196,11 @@ class StreamMessageClient:
             if project_name is None:
                 # 直接保存当前工程
                 print(f"💾 保存当前工程: {self.current_project_name}")
-                response = requests.post(f"{base_url}/projects/save")
+                response = public_session.post(f"{base_url}/projects/save")
             else:
                 # 另存为
                 print(f"💾 另存为工程: {project_name}")
-                response = requests.post(f"{base_url}/projects/save-as", params={"new_project_name": project_name})
+                response = public_session.post(f"{base_url}/projects/save-as", params={"new_project_name": project_name})
             
             if response.status_code == 200:
                 result = response.json()
@@ -175,7 +233,7 @@ class StreamMessageClient:
         try:
             print(f"📂 加载工程: {project_name}")
             
-            response = requests.get(f"{base_url}/projects/{project_name}")
+            response = public_session.get(f"{base_url}/projects/{project_name}")
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success"):
@@ -204,7 +262,7 @@ class StreamMessageClient:
             工程列表
         """
         try:
-            response = requests.get(f"{base_url}/projects")
+            response = public_session.get(f"{base_url}/projects")
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success"):
@@ -283,13 +341,12 @@ class StreamMessageClient:
         else:
             print("❌ 请输入有效的数字")
 
-    def print_snapshot(self):
+    def get_snapshot_document(self, snapshot: Dict[str, Any]):
         """
         打印快照树状结构，仅显示标题与状态
         """
-        current_snapshot = self.get_current_snapshot()
-        if not current_snapshot or "roots" not in current_snapshot:
-            return "⚠️ 当前快照无内容"
+        if "roots" not in snapshot:
+            return "⚠️ 该快照无内容"
 
         def render(node, depth, parent_problem=None):
             indent = "  " * depth
@@ -324,9 +381,9 @@ class StreamMessageClient:
                 return [line]
 
         lines = []
-        for r in current_snapshot.get("roots", []):
+        for r in snapshot.get("roots", []):
             lines.extend(render(r, 0, None))
-        result = "\n📚 当前快照树状结构：" + "\n".join(lines)
+        result = "\n📚 快照树状结构：" + "\n".join(lines)
         return result
         
     async def initialize(self):
@@ -335,7 +392,7 @@ class StreamMessageClient:
         
         try:
             # 获取消息历史
-            response = requests.get(f"{base_url}/agents/messages/history")
+            response = public_session.get(f"{base_url}/agents/messages/history")
             if response.status_code == 200:
                 history_data = response.json()
                 history_messages = history_data.get("messages", [])
@@ -353,13 +410,12 @@ class StreamMessageClient:
                         "content": msg.get("content", ""),
                         "action_title": msg.get("action_title", ""),
                         "action_params": msg.get("action_params", {}),
-                        "snapshot": msg.get("snapshot", {}),
                         "snapshot_id": msg.get("snapshot_id", ""),
                         "visible_node_ids": msg.get("visible_node_ids", []),
                         "created_at": msg.get("created_at", ""),
                         "updated_at": msg.get("updated_at", "")
                     })
-                
+                print("🔄 获取消息历史成功")
                 if incomplete_message_id:
                     print(f"⚠️ 发现未完成消息: {incomplete_message_id}")
                     print("🔄 开始继续传输未完成消息...")
@@ -381,7 +437,7 @@ class StreamMessageClient:
             print(f"🔄 连接到继续传输接口: {incomplete_message_id}")
             
             # 调用继续传输接口
-            response = requests.get(
+            response = public_session.get(
                 f"{base_url}/agents/messages/continue/{incomplete_message_id}",
                 headers={"Accept": "text/event-stream"},
                 stream=True
@@ -409,7 +465,7 @@ class StreamMessageClient:
         output_text += "="*80 + "\n"
         output_text += f"📁 当前工程: {self.current_project_name}\n"
         output_text += "="*80 + "\n"
-        output_text += self.print_snapshot() + "\n"
+        output_text += self.get_snapshot_document(self.get_current_snapshot()) + "\n"
         output_text += "=" * 80 + "\n"
         output_text += "SSE客户端 - 消息列表" + "\n"
         output_text += "=" * 80 + "\n"
@@ -717,7 +773,7 @@ class StreamMessageClient:
         """发送中断连接请求"""
         try:
             print("🔄 正在发送中断请求...")
-            response = requests.post(f"{base_url}/agents/messages/stop")
+            response = public_session.post(f"{base_url}/agents/messages/stop")
             if response.status_code == 200:
                 print("✅ 中断请求发送成功")
             else:
@@ -808,7 +864,7 @@ def create_root_problem() -> str:
     
     try:
         # 通过HTTP接口创建根问题
-        response = requests.post(
+        response = public_session.post(
             f"{base_url}/research-tree/problems/root",
             json=request_data,
             headers={"Content-Type": "application/json"}
@@ -827,7 +883,7 @@ def create_root_problem() -> str:
             print(f"   响应内容: {response.text}")
             return request_data, None
             
-    except requests.exceptions.ConnectionError:
+    except public_session.exceptions.ConnectionError:
         print("❌ 无法连接到后端服务，请确保后端服务正在运行")
         print(f"   尝试连接: {base_url}")
         return request_data, None
@@ -910,7 +966,7 @@ async def call_agent(sse_client: StreamMessageClient):
     
     try:
         # 发送POST请求启动智能体
-        response = requests.post(
+        response = public_session.post(
             f"{base_url}/agents/messages",
             json=request_data,
             headers={"Content-Type": "application/json"},
@@ -943,7 +999,7 @@ async def main():
         print("2. 调用智能体")
         print("3. 保存当前工程")
         print("4. 加载已有工程")
-        print("5. 查看研究树")
+        print("5. 根据消息编号查看快照")
         print("6. 退出")
         print("="*80)
         
@@ -960,8 +1016,29 @@ async def main():
         elif operation_select == "4":
             sse_client.handle_load_project()
         elif operation_select == "5":
-            output_text = sse_client.print_snapshot()
-            print(output_text)
+            # 显示消息列表供用户选择
+            # 获取用户输入的消息编号
+            while True:
+                try:
+                    message_index_input = input("\n请输入要查看的消息编号: ")
+                    if message_index_input.lower() == 'q':
+                        break
+                    
+                    message_index = int(message_index_input)
+                    if 1 <= message_index <= len(sse_client.messages):
+                        # 获取并打印对应的snapshot
+                        snapshot_id = sse_client.get_snapshot_id_by_message_index(message_index)
+                        snapshot = sse_client.get_snapshot_by_id(snapshot_id)
+                        output_text = sse_client.get_snapshot_document(snapshot)
+                        print(output_text)
+                        break
+                    else:
+                        print(f"❌ 消息编号必须在 1 到 {len(sse_client.messages)} 之间")
+                        continue
+                except ValueError:
+                    print("❌ 请输入有效的数字，或输入 'q' 退出")
+                    continue
+            
             input("按回车键继续...")
         elif operation_select == "6":
             break

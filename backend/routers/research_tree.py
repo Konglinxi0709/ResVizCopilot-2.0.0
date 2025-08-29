@@ -15,10 +15,9 @@ from backend.database.schemas.request_models import (
     SetSelectedSolutionRequest,
 )
 
-@router.get("/snapshots/current")
-def get_current_snapshot():
-    return db.get_current_snapshot()
-
+@router.get("/snapshots/{snapshot_id}")
+def get_snapshot(snapshot_id: str):
+    return db.get_snapshot_query(snapshot_id)
 
 @router.post("/problems/root")
 async def create_root_problem(body: ProblemRequest):
