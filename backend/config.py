@@ -18,6 +18,11 @@ class Settings:
     print(DEEPSEEK_API_KEY)
     DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
     
+    # 代理配置
+    HTTP_PROXY: Optional[str] = os.getenv("HTTP_PROXY", None)
+    HTTPS_PROXY: Optional[str] = os.getenv("HTTPS_PROXY", None)
+    NO_PROXY: Optional[str] = os.getenv("NO_PROXY", None)
+    
     # 模型配置
     DEEPSEEK_REASONER_MODEL: str = os.getenv("DEEPSEEK_REASONER_MODEL", "deepseek-reasoner")
     DEEPSEEK_V3_MODEL: str = os.getenv("DEEPSEEK_V3_MODEL", "deepseek-chat")
@@ -40,6 +45,21 @@ class Settings:
             raise ValueError("DEEPSEEK_API_KEY is required")
         if not cls.DEEPSEEK_BASE_URL:
             raise ValueError("DEEPSEEK_BASE_URL is required")
+    
+    @classmethod
+    def get_proxy_config(cls) -> dict:
+        """获取代理配置字典"""
+        proxy_config = {}
+        
+        # 设置环境变量，让httpx库自动使用
+        if cls.HTTP_PROXY:
+            proxy_config["http_proxy"] = cls.HTTP_PROXY
+        if cls.HTTPS_PROXY:
+            proxy_config["https_proxy"] = cls.HTTPS_PROXY
+        if cls.NO_PROXY:
+            proxy_config["no_proxy"] = cls.NO_PROXY
+            
+        return proxy_config
 
 
 # 创建全局配置实例

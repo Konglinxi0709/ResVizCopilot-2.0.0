@@ -289,8 +289,7 @@ class StreamMessageClient:
         """
         current_snapshot = self.get_current_snapshot()
         if not current_snapshot or "roots" not in current_snapshot:
-            print("⚠️ 当前快照无内容")
-            return
+            return "⚠️ 当前快照无内容"
 
         def render(node, depth, parent_problem=None):
             indent = "  " * depth
@@ -327,8 +326,8 @@ class StreamMessageClient:
         lines = []
         for r in current_snapshot.get("roots", []):
             lines.extend(render(r, 0, None))
-        print("\n📚 当前快照树状结构：")
-        print("\n".join(lines))
+        result = "\n📚 当前快照树状结构：" + "\n".join(lines)
+        return result
         
     async def initialize(self):
         """初始化客户端，获取历史消息"""
@@ -406,42 +405,37 @@ class StreamMessageClient:
     def print_messages(self):
         """打印消息列表"""
         self.clear_screen()
-        print("="*80)
-        print(f"📁 当前工程: {self.current_project_name}")
-        print("="*80)
-        self.print_snapshot()
-        print("=" * 80)
-        print("SSE客户端 - 消息列表")
-        print("=" * 80)
-        print(f"当前时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"消息总数: {len(self.messages)}")
-        print("=" * 80)
-        
+        output_text = ""
+        output_text += "="*80 + "\n"
+        output_text += f"📁 当前工程: {self.current_project_name}\n"
+        output_text += "="*80 + "\n"
+        output_text += self.print_snapshot() + "\n"
+        output_text += "=" * 80 + "\n"
+        output_text += "SSE客户端 - 消息列表" + "\n"
+        output_text += "=" * 80 + "\n"
+        output_text += f"当前时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        output_text += f"消息总数: {len(self.messages)}\n"
+        output_text += "=" * 80 + "\n"
         for i, msg in enumerate(self.messages, 1):
-            print(f"\n[{i}] 消息ID: {msg.get('id', 'N/A')}")
-            print(f"    角色: {msg.get('role', 'N/A')}")
-            
-            # 显示发送者信息
+            output_text += f"\n[{i}] 消息ID: {msg.get('id', 'N/A')}\n"
+            output_text += f"    角色: {msg.get('role', 'N/A')}\n"
             sender_info = self.get_message_sender_info(msg)
-            print(f"    发送者: {sender_info}")
-            
-            print(f"    标题: {msg.get('title', 'N/A')}")
-            print(f"    状态: {msg.get('status', 'N/A')}")
-            
-            # 只对生成中的消息显示思考内容
+            output_text += f"    发送者: {sender_info}\n"
+            output_text += f"    标题: {msg.get('title', 'N/A')}\n"
+            output_text += f"    状态: {msg.get('status', 'N/A')}\n"
             if msg.get('status') == "generating" and msg.get('thinking'):
-                print(f"    思考: {msg.get('thinking', 'N/A')}")
-            
-            print(f"    内容: {msg.get('content', 'N/A')}")
+                output_text += f"    思考: {msg.get('thinking', 'N/A')}\n"
+            output_text += f"    内容: {msg.get('content', 'N/A')}\n"
             if msg.get('action_title'):
-                print(f"    行动: {msg.get('action_title')}")
+                output_text += f"    行动: {msg.get('action_title')}\n"
             if msg.get('snapshot_id'):
-                print(f"    快照: {msg.get('snapshot_id')}")
+                output_text += f"    快照: {msg.get('snapshot_id')}\n"
             if msg.get('visible_node_ids'):
-                print(f"    可见节点: {msg.get('visible_node_ids')}")
-            print("-" * 80)
-        
-        print(f"\n最新消息时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                output_text += f"    可见节点: {msg.get('visible_node_ids')}\n"
+            output_text += "-" * 80 + "\n"
+
+        output_text += f"\n最新消息时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+        print(output_text)
         
     async def handle_sse_stream(self, response):
         """处理SSE流"""
@@ -501,7 +495,7 @@ class StreamMessageClient:
                     
         except Exception as e:
             print(f"❌ 处理SSE流时出错: {e}")
-            await asyncio.sleep(0.5)
+            raise e
     
 
 
@@ -521,7 +515,7 @@ class StreamMessageClient:
                 message_id = patch_data.get("message_id")
                 if not message_id:
                     print("❌ 回溯操作必须指定message_id")
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(5)
                 else:
                     await self._handle_rollback(message_id)
             else:
@@ -540,7 +534,7 @@ class StreamMessageClient:
                         await self._update_existing_message(patch_data)
         except Exception as e:
             print(f"❌ 处理patch时出错: {e}")
-            await asyncio.sleep(0.5)
+            raise e
     
     async def _create_message_from_patch(self, patch_data: Dict[str, Any]) -> str:
         """
@@ -556,13 +550,13 @@ class StreamMessageClient:
         generating_msg = self._get_incomplete_message()
         if generating_msg:
             print(f"⚠️ 存在正在生成的消息: {generating_msg['id']}")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(5)
         
         # 检查role属性是否存在
         role = patch_data.get("role")
         if role is None:
             print("⚠️ 创建新消息时必须指定role属性")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(5)
         
         # 创建新消息
         message = {
@@ -601,7 +595,7 @@ class StreamMessageClient:
         
         if message is None:
             print(f"❌ 消息不存在: {message_id}")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(5)
             return None
         
         # 应用补丁
@@ -639,7 +633,7 @@ class StreamMessageClient:
         
         if rollback_index == -1:
             print(f"⚠️ 回溯消息不存在: {message_id}")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(5)
             return self.messages[-1]["id"] if self.messages else ""
         
         # 删除从该位置开始的所有消息
@@ -652,7 +646,7 @@ class StreamMessageClient:
         target_message["updated_at"] = time.strftime('%Y-%m-%d %H:%M:%S')
         
         print(f"🔄 回溯消息: 删除了 {len(messages_to_remove)} 条消息")
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(3)
         
         # 返回剩余的最新消息ID
         return self.messages[-1]["id"] if self.messages else ""
@@ -934,6 +928,7 @@ async def call_agent(sse_client: StreamMessageClient):
         
     except Exception as e:
         print(f"❌ 测试智能体时出错: {e}")
+        raise e
 
 
 async def main():
@@ -965,7 +960,8 @@ async def main():
         elif operation_select == "4":
             sse_client.handle_load_project()
         elif operation_select == "5":
-            sse_client.print_snapshot()
+            output_text = sse_client.print_snapshot()
+            print(output_text)
             input("按回车键继续...")
         elif operation_select == "6":
             break

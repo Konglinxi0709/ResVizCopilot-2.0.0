@@ -3,6 +3,7 @@ DeepSeek LLM客户端
 支持推理模型(reasoner)和普通模型(v3)的流式生成
 """
 import asyncio
+import os
 from typing import Optional, Callable, Dict, Any, List
 from openai import AsyncOpenAI
 
@@ -41,6 +42,18 @@ class DeepSeekClient:
         else:  # v3
             self.model_name = settings.DEEPSEEK_V3_MODEL
             self.supports_reasoning = False
+        
+        # 设置代理环境变量（如果配置了代理）
+        proxy_config = settings.get_proxy_config()
+        if proxy_config:
+            # 设置环境变量，让httpx库自动使用代理
+            if "http_proxy" in proxy_config:
+                os.environ["HTTP_PROXY"] = proxy_config["http_proxy"]
+            if "https_proxy" in proxy_config:
+                os.environ["HTTPS_PROXY"] = proxy_config["https_proxy"]
+            if "no_proxy" in proxy_config:
+                os.environ["NO_PROXY"] = proxy_config["no_proxy"]
+            logger.info(f"代理配置已设置: {proxy_config}")
         
         # 初始化OpenAI客户端
         self.client = AsyncOpenAI(

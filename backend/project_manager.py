@@ -167,7 +167,7 @@ class ProjectManager:
             # 恢复快照
             for snapshot_id, snapshot_data in project_data["snapshot_map"].items():
                 from backend.database.schemas.research_tree import Snapshot
-                snapshot = Snapshot(**snapshot_data)
+                snapshot = Snapshot.from_dict(snapshot_data)
                 self.database_manager.snapshot_map[snapshot_id] = snapshot
             
             # 设置当前快照
