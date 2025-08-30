@@ -269,6 +269,10 @@ class ProjectManager:
     def load_project(self, project_name: str) -> Dict[str, Any]:
         """加载指定工程"""
         try:
+            # 如果当前工程非空，先自动保存
+            if self.current_project_name and self._has_data():
+                self.save_current_project()
+
             self._load_project_data(project_name)
             
             return {
@@ -373,6 +377,34 @@ class ProjectManager:
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "message_count": len(self.message_manager.messages),
             "snapshot_count": len(self.database_manager.snapshot_map)
+        }
+    
+    def get_current_project_full_data(self) -> Dict[str, Any]:
+        """
+        获取当前工程的完整数据，包括消息历史和工程信息
+        完全保留 /agents/messages/history 的数据格式，并添加工程相关信息
+        
+        Returns:
+            包含消息历史和工程信息的完整数据
+        """
+        # 获取消息历史（完全保留原有格式）
+        messages = self.message_manager.get_message_history()
+        incomplete_msg = self.message_manager.get_incomplete_message()
+        
+        # 获取工程信息
+        project_info = self.get_current_project_info()
+        
+        return {
+            # 完全保留原有的消息历史数据格式
+            "messages": messages,
+            "incomplete_message_id": incomplete_msg.id if incomplete_msg else None,
+            
+            # 新增工程相关信息
+            "project_info": project_info,
+            
+            # 可以在这里添加其他工程相关的数据
+            "current_snapshot_id": self.database_manager.current_snapshot_id,
+            "has_data": self._has_data()
         }
 
 # 创建全局唯一的项目管理器实例

@@ -60,17 +60,25 @@ class StreamMessageClient:
         for msg in self.messages[::-1]:
             snapshot_id = msg.get("snapshot_id")
             if snapshot_id:
+                #print("最新snapshot_id: ", snapshot_id)
                 return snapshot_id
-        return {}
+        print("无带snapshot_id的消息")
+        return ""
 
     def get_current_snapshot(self):
         """更新当前快照"""
+        #print("!!!获取当前snapshot!!!")
         snapshot_id = self.get_current_snapshot_id()
-        if self.current_snapshot.get("id") == snapshot_id:
-            return self.current_snapshot
-        if snapshot_id:
-            return self.get_snapshot_by_id(snapshot_id)
-        return {}
+        #print("当前保存snapshot: ", self.current_snapshot)
+        if snapshot_id and self.current_snapshot.get("id") != snapshot_id:
+            #print("发现当前存储落后，现有snapshot：")
+            #print(self.current_snapshot)
+            self.current_snapshot = self.get_snapshot_by_id(snapshot_id)
+            #print("更新后的snapshot:")
+            #print(self.current_snapshot)
+        elif not snapshot_id:
+            self.current_snapshot = {}
+        return self.current_snapshot
 
     def get_snapshot_id_by_message_index(self, message_index: int) -> Optional[str]:
         """
@@ -220,7 +228,47 @@ class StreamMessageClient:
             print(f"❌ 保存工程失败: {e}")
             return False
 
-    def load_project(self, project_name: str) -> bool:
+    async def create_new_project(self, project_name: str) -> bool:
+        """
+        创建新工程
+        
+        Args:
+            project_name: 工程名称
+            
+        Returns:
+            是否创建成功
+        """
+        try:
+            print(f"🔨 创建新工程: {project_name}")
+            
+            # 调用后端接口创建工程
+            response = public_session.post(f"{base_url}/projects", params={"project_name": project_name})
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    print(f"✅ 工程创建成功: {project_name}")
+                    
+                    # 同步新工程的数据到前端
+                    print("🔄 正在同步新工程数据...")
+                    sync_success = await self.sync_project_data()
+                    if sync_success:
+                        print(f"✅ 新工程初始化完成: {self.current_project_name}")
+                        return True
+                    else:
+                        print("❌ 新工程数据同步失败")
+                        return False
+                else:
+                    print(f"❌ 工程创建失败: {result.get('message')}")
+                    return False
+            else:
+                print(f"❌ 创建请求失败: HTTP {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 创建工程失败: {e}")
+            return False
+
+    async def load_project(self, project_name: str) -> bool:
         """
         加载指定工程
         
@@ -233,16 +281,22 @@ class StreamMessageClient:
         try:
             print(f"📂 加载工程: {project_name}")
             
+            # 调用后端接口切换工程
             response = public_session.get(f"{base_url}/projects/{project_name}")
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success"):
-                    # 更新当前工程名称
-                    self.current_project_name = result.get("project_name", project_name)
-                    # 清空当前消息列表（实际应该从后端加载）
-                    self.messages = []
-                    print(f"✅ 工程加载成功: {self.current_project_name}")
-                    return True
+                    print(f"✅ 工程切换成功: {project_name}")
+                    
+                    # 同步工程数据到前端
+                    print("🔄 正在同步工程数据...")
+                    sync_success = await self.sync_project_data()
+                    if sync_success:
+                        print(f"✅ 工程加载完成: {self.current_project_name}")
+                        return True
+                    else:
+                        print("❌ 工程数据同步失败")
+                        return False
                 else:
                     print(f"❌ 工程加载失败: {result.get('message')}")
                     return False
@@ -316,7 +370,33 @@ class StreamMessageClient:
         else:
             print("❌ 无效的选择")
 
-    def handle_load_project(self) -> None:
+    async def handle_create_project(self) -> None:
+        """处理创建新工程操作"""
+        print("\n🔨 创建新工程")
+        
+        # 输入新工程名称
+        project_name = input("请输入新工程名称: ").strip()
+        
+        if not project_name:
+            print("❌ 工程名称不能为空")
+            return
+        
+        # 检查工程名称是否已存在
+        existing_projects = self.list_projects()
+        existing_names = [p["project_name"] for p in existing_projects]
+        
+        if project_name in existing_names:
+            print(f"❌ 工程名称 '{project_name}' 已存在，请选择其他名称")
+            return
+        
+        # 创建新工程
+        if await self.create_new_project(project_name):
+            print(f"✅ 工程创建成功: {project_name}")
+            print(f"📁 当前工程已切换为: {self.current_project_name}")
+        else:
+            print(f"❌ 工程创建失败: {project_name}")
+
+    async def handle_load_project(self) -> None:
         """处理加载工程操作"""
         print("\n📂 加载工程")
         
@@ -332,7 +412,7 @@ class StreamMessageClient:
             
             if 0 <= project_index < len(projects):
                 project_name = projects[project_index]["project_name"]
-                if self.load_project(project_name):
+                if await self.load_project(project_name):
                     print(f"✅ 工程加载成功: {project_name}")
                 else:
                     print(f"❌ 工程加载失败: {project_name}")
@@ -383,50 +463,89 @@ class StreamMessageClient:
         lines = []
         for r in snapshot.get("roots", []):
             lines.extend(render(r, 0, None))
-        result = "\n📚 快照树状结构：" + "\n".join(lines)
+        result = "📚 快照树状结构：\n" + "\n".join(lines)
         return result
         
-    async def initialize(self):
-        """初始化客户端，获取历史消息"""
-        print("🔄 正在初始化SSE客户端...")
+    async def sync_project_data(self) -> bool:
+        """
+        同步工程数据，包括消息历史和工程信息
         
+        Returns:
+            是否同步成功
+        """
         try:
-            # 获取消息历史
-            response = public_session.get(f"{base_url}/agents/messages/history")
+            print("🔄 正在同步工程数据...")
+            
+            # 获取工程完整数据（包括消息历史和工程信息）
+            response = public_session.get(f"{base_url}/projects/current/full-data")
             if response.status_code == 200:
-                history_data = response.json()
-                history_messages = history_data.get("messages", [])
-                incomplete_message_id = history_data.get("incomplete_message_id")
-                self.messages = []
-                # 将历史消息转换为内部格式
-                for msg in history_messages:
-                    self.messages.append({
-                        "id": msg.get("id"),
-                        "role": msg.get("role"),
-                        "publisher": msg.get("publisher"),
-                        "status": msg.get("status"),
-                        "title": msg.get("title"),
-                        "thinking": msg.get("thinking", ""),
-                        "content": msg.get("content", ""),
-                        "action_title": msg.get("action_title", ""),
-                        "action_params": msg.get("action_params", {}),
-                        "snapshot_id": msg.get("snapshot_id", ""),
-                        "visible_node_ids": msg.get("visible_node_ids", []),
-                        "created_at": msg.get("created_at", ""),
-                        "updated_at": msg.get("updated_at", "")
-                    })
-                print("🔄 获取消息历史成功")
-                if incomplete_message_id:
-                    print(f"⚠️ 发现未完成消息: {incomplete_message_id}")
-                    print("🔄 开始继续传输未完成消息...")
-                    await self.continue_incomplete_message(incomplete_message_id)
+                response_data = response.json()
+                if response_data.get("success"):
+                    full_data = response_data.get("data", {})
+                    
+                    # 获取消息历史（完全保留原有格式）
+                    history_messages = full_data.get("messages", [])
+                    incomplete_message_id = full_data.get("incomplete_message_id")
+                    
+                    # 获取工程信息
+                    project_info = full_data.get("project_info", {})
+                    current_snapshot_id = full_data.get("current_snapshot_id")
+                    
+                    # 更新工程信息
+                    self.current_project_name = project_info.get("project_name", "未命名")
+                    
+                    # 重置消息列表
+                    self.messages = []
+                    
+                    # 将历史消息转换为内部格式（完全保留原有逻辑）
+                    for msg in history_messages:
+                        self.messages.append({
+                            "id": msg.get("id"),
+                            "role": msg.get("role"),
+                            "publisher": msg.get("publisher"),
+                            "status": msg.get("status"),
+                            "title": msg.get("title"),
+                            "thinking": msg.get("thinking", ""),
+                            "content": msg.get("content", ""),
+                            "action_title": msg.get("action_title", ""),
+                            "action_params": msg.get("action_params", {}),
+                            "snapshot_id": msg.get("snapshot_id", ""),
+                            "visible_node_ids": msg.get("visible_node_ids", []),
+                            "created_at": msg.get("created_at", ""),
+                            "updated_at": msg.get("updated_at", "")
+                        })
+                    self.get_current_snapshot()
+                    print(f"✅ 工程数据同步成功: {self.current_project_name}")
+                    print(f"📊 消息数量: {len(self.messages)}")
+                    print(f"📊 快照数量: {project_info.get('snapshot_count', 0)}")
+                    
+                    # 处理未完成的消息
+                    if incomplete_message_id:
+                        print(f"⚠️ 发现未完成消息: {incomplete_message_id}")
+                        print("🔄 开始继续传输未完成消息...")
+                        await self.continue_incomplete_message(incomplete_message_id)
+                    else:
+                        print("✅ 没有未完成的消息")
+                    
+                    return True
                 else:
-                    print("✅ 没有未完成的消息")
+                    print(f"❌ 获取工程数据失败: {response_data.get('message', '未知错误')}")
+                    return False
             else:
-                print(f"❌ 获取消息历史失败: HTTP {response.status_code}")
+                print(f"❌ 获取工程数据失败: HTTP {response.status_code}")
+                return False
                 
         except Exception as e:
-            print(f"❌ 初始化客户端时出错: {e}")
+            print(f"❌ 同步工程数据时出错: {e}")
+            return False
+        
+    async def initialize(self):
+        """初始化客户端，获取工程完整数据"""
+        print("🔄 正在初始化SSE客户端...")
+        success = await self.sync_project_data()
+        if not success:
+            print("❌ 初始化失败")
+            raise Exception("初始化SSE客户端失败")
     
     async def continue_incomplete_message(self, incomplete_message_id: str):
         """继续未完成的消息传输"""
@@ -460,7 +579,6 @@ class StreamMessageClient:
         
     def print_messages(self):
         """打印消息列表"""
-        self.clear_screen()
         output_text = ""
         output_text += "="*80 + "\n"
         output_text += f"📁 当前工程: {self.current_project_name}\n"
@@ -491,6 +609,7 @@ class StreamMessageClient:
             output_text += "-" * 80 + "\n"
 
         output_text += f"\n最新消息时间: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+        self.clear_screen()
         print(output_text)
         
     async def handle_sse_stream(self, response):
@@ -523,7 +642,7 @@ class StreamMessageClient:
                             print("⏳ 等待SSE连接结束...")
                             await asyncio.sleep(3)
                     
-                    print(f"📡 收到事件: {event.event}")
+                    #print(f"📡 收到事件: {event.event}")
                     
                     if event.event == "patch":
                         # 处理patch事件
@@ -565,7 +684,8 @@ class StreamMessageClient:
         3. 更新现有消息
         """
         try:
-            print(patch_data)
+            if patch_data.get("snapshot", {}):
+                self.current_snapshot = patch_data["snapshot"]["data"]
             # 处理回溯操作
             if patch_data.get("rollback", False):
                 message_id = patch_data.get("message_id")
@@ -625,7 +745,6 @@ class StreamMessageClient:
             "content": patch_data.get("content_delta", ""),
             "action_title": patch_data.get("action_title", ""),
             "action_params": patch_data.get("action_params", {}),
-            "snapshot": patch_data.get("snapshot", {}),
             "snapshot_id": patch_data.get("snapshot_id", ""),
             "visible_node_ids": patch_data.get("visible_node_ids", []),
             "created_at": time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -728,8 +847,6 @@ class StreamMessageClient:
             message["action_title"] = patch_data["action_title"]
         if patch_data.get("action_params") is not None:
             message["action_params"] = patch_data["action_params"]
-        if patch_data.get("snapshot") is not None:
-            message["snapshot"] = patch_data["snapshot"]
         if patch_data.get("snapshot_id") is not None:
             message["snapshot_id"] = patch_data["snapshot_id"]
         if patch_data.get("visible_node_ids") is not None:
@@ -997,10 +1114,11 @@ async def main():
         print("【可选操作列表】")
         print("1. 创建根问题")
         print("2. 调用智能体")
-        print("3. 保存当前工程")
-        print("4. 加载已有工程")
-        print("5. 根据消息编号查看快照")
-        print("6. 退出")
+        print("3. 创建新工程")
+        print("4. 保存当前工程")
+        print("5. 加载已有工程")
+        print("6. 根据消息编号查看快照")
+        print("7. 退出")
         print("="*80)
         
         operation_select = input("请选择操作: ")
@@ -1012,12 +1130,12 @@ async def main():
         elif operation_select == "2":
             await call_agent(sse_client)
         elif operation_select == "3":
-            sse_client.handle_save_project()
+            await sse_client.handle_create_project()
         elif operation_select == "4":
-            sse_client.handle_load_project()
+            sse_client.handle_save_project()
         elif operation_select == "5":
-            # 显示消息列表供用户选择
-            # 获取用户输入的消息编号
+            await sse_client.handle_load_project()
+        elif operation_select == "6":
             while True:
                 try:
                     message_index_input = input("\n请输入要查看的消息编号: ")
@@ -1040,7 +1158,7 @@ async def main():
                     continue
             
             input("按回车键继续...")
-        elif operation_select == "6":
+        elif operation_select == "7":
             break
         else:
             print("❌ 无效的选择，请重新输入")

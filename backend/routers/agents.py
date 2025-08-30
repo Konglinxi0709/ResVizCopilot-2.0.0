@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from backend.message.schemas.request_models import (
-    SendMessageRequest, MessageHistoryResponse, StopResponse
+    SendMessageRequest, StopResponse
 )
 from backend.agents.auto_research_agent import AutoResearchAgent
 from backend.agents.user_chat_agent import UserChatAgent
@@ -129,24 +129,7 @@ async def sse_send_message(request: SendMessageRequest):
     return EventSourceResponse(event_stream())
 
 
-@router.get("/messages/history", response_model=MessageHistoryResponse)
-async def get_message_history():
-    """
-    获取会话的消息历史，包括未完成消息的ID
-    
-    Returns:
-        消息历史响应
-    """
-    messages = shared_message_manager.get_message_history()
-    incomplete_msg = shared_message_manager.get_incomplete_message()
-    
-    response = MessageHistoryResponse(
-        messages=messages,
-        incomplete_message_id=incomplete_msg.id if incomplete_msg else None
-    )
-    
-    logger.info(f"返回消息历史: {len(messages)}条消息")
-    return response
+
 
 
 @router.get("/messages/continue/{message_id}", response_class=EventSourceResponse)

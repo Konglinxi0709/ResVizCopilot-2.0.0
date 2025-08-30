@@ -159,3 +159,24 @@ async def get_current_project_info():
     except Exception as e:
         logger.error(f"获取当前工程信息失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取当前工程信息失败: {str(e)}")
+
+@router.get("/current/full-data")
+async def get_current_project_full_data():
+    """
+    获取当前工程的完整数据，包括消息历史和工程信息
+    这个接口完全保留 /agents/messages/history 的数据格式，并添加工程相关信息
+    
+    Returns:
+        包含消息历史和工程信息的完整数据
+    """
+    try:
+        result = pm.get_current_project_full_data()
+        logger.info(f"返回工程完整数据: {result['project_info']['project_name']}, {len(result['messages'])}条消息")
+        return {
+            "success": True,
+            "data": result
+        }
+        
+    except Exception as e:
+        logger.error(f"获取当前工程完整数据失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取当前工程完整数据失败: {str(e)}")
