@@ -1,0 +1,43 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.el-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+
+.action-icon {
+  margin-left: 8px;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+  transition: color 0.3s;
+}
+
+.action-icon:hover {
+  color: var(--el-color-primary);
+}
+
+.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.text-block {
+  word-break: break-word;       /* 允许在单词内断行，防止溢出 */
+  overflow-wrap: break-word;    /* 在长单词或URL中间断行 */
+  white-space: normal;          /* 默认行为：合并空白符 */
+}
