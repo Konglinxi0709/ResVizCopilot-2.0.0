@@ -257,13 +257,13 @@ export default defineComponent({
         ElMessage.error('查看快照失败')
       }
     },
+
+    handleAgentOperating(nodeId) {
+      this.treeStore.setAgentOperatingNode(nodeId)
+    },
     
     exitSnapshotView() {
       this.treeStore.exitSnapshotView()
-    },
-    
-    handleAgentOperating(nodeId) {
-      this.treeStore.setAgentOperatingNode(nodeId)
     }
   }
 })

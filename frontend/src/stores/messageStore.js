@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { apiService } from '../services/apiService'
+import { useTreeStore } from './treeStore'
 
 export const useMessageStore = defineStore('message', {
   state: () => ({
@@ -59,6 +60,18 @@ export const useMessageStore = defineStore('message', {
     // 检查是否可以发送消息（没有正在生成的消息）
     canSendMessage: (state) => {
       return !state.isGenerating
+    },
+
+    // 根据ID查找消息
+    getMessageById: (state) => {
+      return (messageId) => {
+        return state.messages.find(msg => msg.id === messageId)
+      }
+    },
+
+    // 获取未完成的消息
+    getIncompleteMessage: (state) => {
+      return state.messages.find(msg => msg.status === 'generating')
     }
   },
   
@@ -91,6 +104,8 @@ export const useMessageStore = defineStore('message', {
         publisher: message.publisher || null,
         snapshot_id: message.snapshot_id || null,
         visible_node_ids: message.visible_node_ids || [],
+        action_title: message.action_title || '',
+        action_params: message.action_params || {},
         created_at: message.created_at || new Date().toISOString(),
         updated_at: message.updated_at || new Date().toISOString(),
         ...message
@@ -100,144 +115,477 @@ export const useMessageStore = defineStore('message', {
       return fullMessage
     },
     
-    // 更新消息
-    updateMessage(messageId, updates) {
-      const messageIndex = this.messages.findIndex(msg => msg.id === messageId)
-      if (messageIndex !== -1) {
-        this.messages[messageIndex] = {
-          ...this.messages[messageIndex],
-          ...updates,
-          updated_at: new Date().toISOString()
-        }
-        return this.messages[messageIndex]
+    // 生成消息ID
+    generateMessageId() {
+      return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+    },
+
+    // 更新消息状态
+    updateMessageStatus(messageId, status) {
+      const message = this.messages.find(msg => msg.id === messageId)
+      if (message) {
+        message.status = status
+        message.updated_at = new Date().toISOString()
       }
-      return null
     },
     
     // 删除消息
     removeMessage(messageId) {
-      const messageIndex = this.messages.findIndex(msg => msg.id === messageId)
-      if (messageIndex !== -1) {
-        this.messages.splice(messageIndex, 1)
-        return true
+      const index = this.messages.findIndex(msg => msg.id === messageId)
+      if (index !== -1) {
+        this.messages.splice(index, 1)
       }
-      return false
     },
-    
-    // 获取消息
-    getMessage(messageId) {
-      return this.messages.find(msg => msg.id === messageId) || null
+
+    // 清空所有消息
+    clearMessages() {
+      this.messages = []
+      this.isGenerating = false
+      this.currentGeneratingMessageId = null
+      this.currentAgentName = null
     },
-    
-    // 应用patch更新
-    applyPatch(patch) {
+
+    /**
+     * 处理SSE patch数据
+     * 基于test_CLI_frontend.py的handle_patch逻辑
+     */
+    async handlePatch(patchData) {
       try {
-        const { message_id, patch_type, data } = patch
-        
-        switch (patch_type) {
-          case 'message_created':
-            this.addMessage(data)
-            break
-            
-          case 'message_updated':
-            this.updateMessage(message_id, data)
-            break
-            
-          case 'title_updated':
-            this.updateMessage(message_id, { title: data.title })
-            break
-            
-          case 'content_updated':
-            this.updateMessage(message_id, { content: data.content })
-            break
-            
-          case 'thinking_updated':
-            this.updateMessage(message_id, { thinking: data.thinking })
-            break
-            
-          case 'status_updated':
-            this.updateMessage(message_id, { status: data.status })
-            break
-            
-          case 'snapshot_updated':
-            this.updateMessage(message_id, { 
-              snapshot_id: data.snapshot_id,
-              visible_node_ids: data.visible_node_ids || []
-            })
-            break
-            
-          default:
-            console.warn('未知的patch类型:', patch_type)
+        console.log('📝 处理patch数据:', patchData)
+
+        // 更新快照数据
+        if (patchData.snapshot && patchData.snapshot.data) {
+          const treeStore = useTreeStore()
+          await treeStore.updateCurrentSnapshot(patchData.snapshot.data)
+        }
+
+        // 处理回溯操作
+        if (patchData.rollback) {
+          const messageId = patchData.message_id
+          if (!messageId) {
+            console.error('❌ 回溯操作必须指定message_id')
+            return
+          }
+          await this.handleRollback(messageId)
+          return
+        }
+
+        // 处理消息更新
+        const messageId = patchData.message_id
+
+        if (messageId === "-") {
+          // 更新所有正在生成的消息
+          this.updateAllGeneratingMessages(patchData)
+        } else {
+          const existingMessage = this.getMessageById(messageId)
+          
+          if (!existingMessage) {
+            // 创建新消息
+            await this.createMessageFromPatch(patchData)
+          } else {
+            // 更新现有消息
+            this.updateExistingMessage(patchData)
+          }
         }
       } catch (error) {
-        console.error('应用patch失败:', error)
+        console.error('❌ 处理patch时出错:', error)
+        this.setError(error.message || '处理消息更新失败')
       }
     },
-    
-    // 发送消息
-    async sendMessage(agentName, content, params = {}) {
+
+    /**
+     * 从patch创建新消息
+     */
+    async createMessageFromPatch(patchData) {
+      // 检查是否有消息正在生成
+      const generatingMsg = this.getIncompleteMessage
+      if (generatingMsg) {
+        console.warn('⚠️ 存在正在生成的消息:', generatingMsg.id)
+      }
+
+      // 检查role属性
+      const role = patchData.role
+      if (!role) {
+        console.warn('⚠️ 创建新消息时必须指定role属性')
+        return
+      }
+
+      // 创建新消息
+      const message = {
+        id: patchData.message_id,
+        role: role,
+        publisher: patchData.publisher || null,
+        status: patchData.finished ? 'completed' : 'generating',
+        title: patchData.title || '',
+        thinking: patchData.thinking_delta || '',
+        content: patchData.content_delta || '',
+        action_title: patchData.action_title || '',
+        action_params: patchData.action_params || {},
+        snapshot_id: patchData.snapshot_id || '',
+        visible_node_ids: patchData.visible_node_ids || [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      this.addMessage(message)
+
+      // 更新生成状态
+      if (!patchData.finished) {
+        this.isGenerating = true
+        this.currentGeneratingMessageId = message.id
+      }
+    },
+
+    /**
+     * 更新现有消息
+     */
+    updateExistingMessage(patchData) {
+      const messageId = patchData.message_id
+      const message = this.getMessageById(messageId)
+
+      if (!message) {
+        console.error('❌ 消息不存在:', messageId)
+        return
+      }
+
+      this.applyPatchToMessage(patchData, message)
+    },
+
+    /**
+     * 更新所有正在生成的消息
+     */
+    updateAllGeneratingMessages(patchData) {
+      this.messages.forEach(message => {
+        if (message.status === 'generating') {
+          this.applyPatchToMessage(patchData, message)
+        }
+      })
+    },
+
+    /**
+     * 将patch应用到消息上
+     */
+    applyPatchToMessage(patchData, message) {
+      // 增量更新
+      if (patchData.thinking_delta) {
+        message.thinking += patchData.thinking_delta
+      }
+      if (patchData.content_delta) {
+        message.content += patchData.content_delta
+      }
+
+      // 替换更新
+      if (patchData.title !== undefined) {
+        message.title = patchData.title
+      }
+      if (patchData.action_title !== undefined) {
+        message.action_title = patchData.action_title
+      }
+      if (patchData.action_params !== undefined) {
+        message.action_params = patchData.action_params
+      }
+      if (patchData.snapshot_id !== undefined) {
+        message.snapshot_id = patchData.snapshot_id
+      }
+      if (patchData.visible_node_ids !== undefined) {
+        message.visible_node_ids = patchData.visible_node_ids
+      }
+
+      // 更新状态
+      if (patchData.finished) {
+        message.status = 'completed'
+        this.isGenerating = false
+        this.currentGeneratingMessageId = null
+        this.currentAgentName = null
+      }
+
+      // 更新时间戳
+      message.updated_at = new Date().toISOString()
+    },
+
+    /**
+     * 处理消息回溯
+     */
+    async handleRollback(messageId) {
+      try {
+        // 找到消息在列表中的位置
+        const rollbackIndex = this.messages.findIndex(msg => msg.id === messageId)
+        
+        if (rollbackIndex === -1) {
+          console.warn('⚠️ 回溯消息不存在:', messageId)
+          return
+        }
+
+        // 删除从该位置之后的所有消息
+        const messagesToRemove = this.messages.slice(rollbackIndex + 1)
+        this.messages = this.messages.slice(0, rollbackIndex + 1)
+
+        // 重置目标消息状态
+        const targetMessage = this.messages[rollbackIndex]
+        if (targetMessage) {
+          targetMessage.status = 'generating'
+          targetMessage.content = ''
+          targetMessage.thinking = ''
+          targetMessage.updated_at = new Date().toISOString()
+        }
+
+        console.log(`🔄 回溯消息: 删除了 ${messagesToRemove.length} 条消息`)
+
+        // 更新生成状态
+        this.isGenerating = true
+        this.currentGeneratingMessageId = targetMessage?.id || null
+
+      } catch (error) {
+        console.error('❌ 处理回溯时出错:', error)
+        this.setError('消息回溯失败')
+      }
+    },
+
+    /**
+     * 发送智能体消息
+     * 基于test_CLI_frontend.py的call_agent逻辑
+     */
+    async sendAgentMessage(agentName, content, title, otherParams = {}) {
       try {
         this.setLoading(true)
         this.clearError()
         
-        // 设置生成状态
-        this.isGenerating = true
-        this.currentAgentName = agentName
-        
-        const response = await apiService.post('/agents/messages', {
-          agent_name: agentName,
+        const requestData = {
           content: content,
-          ...params
+          title: title,
+          agent_name: agentName,
+          other_params: otherParams
+        }
+
+        console.log('📤 发送智能体消息:', requestData)
+
+        // 发送POST请求启动智能体
+        const response = await fetch(`${process.env.VUE_APP_API_BASE_URL || 'http://localhost:8008'}/agents/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestData)
         })
-        
-        // 开始SSE连接接收流式数据
-        this.startSSEConnection()
-        
-        return response.data
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        console.log('✅ 请求发送成功，开始接收SSE流...')
+
+        // 设置智能体状态
+        this.currentAgentName = agentName
+        this.isGenerating = true
+
+        // 建立SSE连接接收流式数据
+        this.connectToSSE(response, {
+          onMessage: this.handleSSEMessage.bind(this),
+          onError: this.handleSSEError.bind(this),
+          onConnected: () => {
+            console.log('✅ SSE连接已建立，开始接收流式数据')
+          },
+          onDisconnected: () => {
+            console.log('🔌 SSE连接已断开')
+            this.isGenerating = false
+            this.currentAgentName = null
+          }
+        })
+
+        return true
+
       } catch (error) {
-        console.error('发送消息失败:', error)
-        this.setError('发送消息失败')
+        console.error('❌ 发送智能体消息失败:', error)
+        this.setError(error.message || '发送消息失败')
         this.isGenerating = false
         this.currentAgentName = null
-        throw error
+        return false
       } finally {
         this.setLoading(false)
       }
     },
     
-    // 停止生成
-    async stopGeneration() {
+    /**
+     * 连接到SSE
+     * 直接使用响应流，类似CLI前端的handle_sse_stream
+     */
+    connectToSSE(response, callbacks = {}) {
+      this.sseConnection = this.handleSSEStream(response, callbacks)
+    },
+
+    /**
+     * 处理SSE流
+     * 基于test_CLI_frontend.py的handle_sse_stream逻辑
+     */
+    async handleSSEStream(response, callbacks = {}) {
       try {
-        await apiService.post('/agents/messages/stop')
+        console.log('🌊 开始处理SSE流...')
+        
+        if (callbacks.onConnected) {
+          callbacks.onConnected()
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read()
+          
+          if (done) {
+            console.log('✅ SSE流结束')
+            break
+          }
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() // 保留不完整的行
+
+          for (const line of lines) {
+            if (line.trim() === '') continue
+
+            try {
+              // 解析SSE事件格式
+              if (line.startsWith('event:')) {
+                line.substring(6).trim() // 提取事件类型但不存储
+                continue
+              } else if (line.startsWith('data:')) {
+                const data = line.substring(5).trim()
+                
+                if (data === '[DONE]') {
+                  console.log('✅ 收到完成标志')
+                  this.isGenerating = false
+                  this.currentAgentName = null
+                  this.currentGeneratingMessageId = null
+                  break
+                }
+
+                const eventData = JSON.parse(data)
+                
+                // 根据事件类型处理
+                if (eventData.event === 'patch') {
+                  await this.handlePatch(eventData.data || eventData)
+                } else if (eventData.event === 'error') {
+                  console.error('❌ 收到错误事件:', eventData.data)
+                  if (callbacks.onError) {
+                    callbacks.onError(eventData.data)
+                  }
+                } else if (eventData.event === 'finished') {
+                  console.log('✅ 收到完成事件:', eventData.data)
+                  this.isGenerating = false
+                  this.currentAgentName = null
+                  this.currentGeneratingMessageId = null
+                } else {
+                  // 直接作为patch数据处理
+                  await this.handlePatch(eventData)
+                }
+
+                if (callbacks.onMessage) {
+                  callbacks.onMessage(eventData)
+                }
+
+              }
+            } catch (error) {
+              console.error('❌ 解析SSE数据失败:', error, 'line:', line)
+            }
+          }
+        }
+
+      } catch (error) {
+        console.error('❌ 处理SSE流时出错:', error)
+        if (callbacks.onError) {
+          callbacks.onError(error)
+        }
+      } finally {
+        if (callbacks.onDisconnected) {
+          callbacks.onDisconnected()
+        }
+      }
+    },
+
+    /**
+     * 处理SSE消息
+     */
+    handleSSEMessage() {
+      // 由handleSSEStream直接处理，这里保留接口兼容性
+    },
+
+    /**
+     * 处理SSE错误
+     */
+    handleSSEError(error) {
+      console.error('❌ SSE连接错误:', error)
+      this.setError('连接中断，正在尝试重连...')
+      this.isGenerating = false
+      this.currentAgentName = null
+    },
+
+    /**
+     * 断开SSE连接
+     */
+    disconnectSSE() {
+      if (this.sseConnection) {
+        this.sseConnection = null
+      }
         this.isGenerating = false
         this.currentAgentName = null
         this.currentGeneratingMessageId = null
+    },
+
+    /**
+     * 发送中断请求
+     */
+    async sendInterruptRequest() {
+      try {
+        console.log('🛑 发送中断请求...')
         
-        // 关闭SSE连接
-        this.closeSSEConnection()
+        const response = await fetch(`${process.env.VUE_APP_API_BASE_URL || 'http://localhost:8008'}/agents/messages/stop`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (response.ok) {
+          console.log('✅ 中断请求发送成功')
+          this.isGenerating = false
+          this.currentAgentName = null
+          this.currentGeneratingMessageId = null
+          return true
+        } else {
+          console.error('❌ 中断请求失败:', response.status)
+          return false
+        }
       } catch (error) {
-        console.error('停止生成失败:', error)
-        throw error
+        console.error('❌ 发送中断请求失败:', error)
+        return false
       }
     },
     
-    // 回溯消息
+    /**
+     * 回溯到指定消息
+     */
     async rollbackToMessage(messageId) {
       try {
         this.setLoading(true)
         this.clearError()
         
-        await apiService.post(`/agents/messages/rollback-to/${messageId}`)
+        console.log('🔄 回溯到消息:', messageId)
+
+        const response = await apiService.post(`/agents/messages/rollback-to/${messageId}`)
         
-        // 删除指定消息之后的所有消息
-        const messageIndex = this.messages.findIndex(msg => msg.id === messageId)
-        if (messageIndex !== -1) {
-          this.messages.splice(messageIndex + 1)
+        if (response.success) {
+          console.log('✅ 回溯操作成功')
+          // 本地同步删除消息
+          await this.handleRollback(messageId)
+          return true
+        } else {
+          throw new Error(response.message || '回溯操作失败')
         }
-        
-        return true
+
       } catch (error) {
-        console.error('回溯消息失败:', error)
+        console.error('❌ 回溯消息失败:', error)
         this.setError('回溯消息失败')
         throw error
       } finally {
@@ -245,106 +593,117 @@ export const useMessageStore = defineStore('message', {
       }
     },
     
-    // 开始SSE连接
-    startSSEConnection() {
-      // 如果已有连接，先关闭
-      this.closeSSEConnection()
-      
+    /**
+     * 继续未完成的消息传输
+     */
+    async continueIncompleteMessage(messageId) {
       try {
-        const sseUrl = `${process.env.VUE_APP_API_BASE_URL}/agents/messages/continue`
-        this.sseConnection = new EventSource(sseUrl)
-        
-        this.sseConnection.onmessage = (event) => {
-          try {
-            const patch = JSON.parse(event.data)
-            this.applyPatch(patch)
-            
-            // 如果是finished事件，停止生成
-            if (patch.patch_type === 'finished') {
-              this.isGenerating = false
-              this.currentAgentName = null
-              this.currentGeneratingMessageId = null
-              this.closeSSEConnection()
-            }
-          } catch (error) {
-            console.error('处理SSE消息失败:', error)
+        console.log('🔄 继续传输未完成消息:', messageId)
+
+        const response = await fetch(`${process.env.VUE_APP_API_BASE_URL || 'http://localhost:8008'}/agents/messages/continue/${messageId}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'text/event-stream'
           }
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
+
+        console.log('✅ 继续传输连接成功，开始接收SSE流...')
         
-        this.sseConnection.onerror = (error) => {
-          console.error('SSE连接错误:', error)
-          this.handleSSEError()
-        }
-        
-        this.sseConnection.onopen = () => {
-          console.log('SSE连接已建立')
-        }
-      } catch (error) {
-        console.error('建立SSE连接失败:', error)
-        this.handleSSEError()
-      }
-    },
-    
-    // 关闭SSE连接
-    closeSSEConnection() {
-      if (this.sseConnection) {
-        this.sseConnection.close()
-        this.sseConnection = null
-      }
-    },
-    
-    // 处理SSE错误
-    handleSSEError() {
-      this.closeSSEConnection()
-      
-      // 如果正在生成，尝试重连
-      if (this.isGenerating) {
-        setTimeout(() => {
-          console.log('尝试重新连接SSE...')
-          this.startSSEConnection()
-        }, 2000)
-      }
-    },
-    
-    // 生成消息ID
-    generateMessageId() {
-      return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
-    },
-    
-    // 清除所有消息
-    clearAllMessages() {
-      this.messages = []
-      this.isGenerating = false
-      this.currentAgentName = null
-      this.currentGeneratingMessageId = null
-      this.closeSSEConnection()
-    },
-    
-    // 复制消息内容
-    copyMessageContent(messageId) {
-      const message = this.getMessage(messageId)
-      if (!message) return false
-      
-      try {
-        const content = [
-          message.title && `标题: ${message.title}`,
-          message.content && `内容: ${message.content}`,
-          message.thinking && `思考: ${message.thinking}`
-        ].filter(Boolean).join('\n\n')
-        
-        navigator.clipboard.writeText(content)
+        this.isGenerating = true
+        this.currentGeneratingMessageId = messageId
+
+        // 处理SSE流
+        await this.handleSSEStream(response, {
+          onMessage: this.handleSSEMessage.bind(this),
+          onError: this.handleSSEError.bind(this),
+          onConnected: () => {
+            console.log('✅ 继续传输SSE连接已建立')
+          },
+          onDisconnected: () => {
+            console.log('🔌 继续传输SSE连接已断开')
+            this.isGenerating = false
+          }
+        })
+
         return true
+
       } catch (error) {
-        console.error('复制失败:', error)
+        console.error('❌ 继续传输失败:', error)
+        this.setError('继续传输失败')
         return false
       }
+    },
+
+    /**
+     * 从后端同步消息历史
+     * 参考CLI前端的sync_project_data逻辑
+     */
+    async syncMessagesFromBackend() {
+      try {
+        this.setLoading(true)
+        this.clearError()
+
+        console.log('🔄 正在同步消息历史...')
+
+        // 获取工程完整数据（包括消息历史）
+        const response = await apiService.get('/projects/current/full-data')
+        
+        if (response.success && response.data) {
+          const fullData = response.data
+          
+          // 获取消息历史
+          const historyMessages = fullData.messages || []
+          const incompleteMessageId = fullData.incomplete_message_id
+
+          console.log(`📊 同步到 ${historyMessages.length} 条消息`)
+
+          // 清空并重新加载消息
+      this.messages = []
+
+          // 转换消息格式
+          for (const msg of historyMessages) {
+            this.addMessage({
+              id: msg.id,
+              role: msg.role,
+              publisher: msg.publisher,
+              status: msg.status,
+              title: msg.title,
+              thinking: msg.thinking || '',
+              content: msg.content || '',
+              action_title: msg.action_title || '',
+              action_params: msg.action_params || {},
+              snapshot_id: msg.snapshot_id || '',
+              visible_node_ids: msg.visible_node_ids || [],
+              created_at: msg.created_at,
+              updated_at: msg.updated_at
+            })
+          }
+
+          // 处理未完成的消息
+          if (incompleteMessageId) {
+            console.log('⚠️ 发现未完成消息:', incompleteMessageId)
+            console.log('🔄 开始继续传输未完成消息...')
+            await this.continueIncompleteMessage(incompleteMessageId)
+          } else {
+            console.log('✅ 没有未完成的消息')
+          }
+
+        return true
+        } else {
+          throw new Error('获取工程数据失败')
+        }
+
+      } catch (error) {
+        console.error('❌ 同步消息历史失败:', error)
+        this.setError('同步消息失败')
+        return false
+      } finally {
+        this.setLoading(false)
+      }
     }
-  },
-  
-  // 持久化配置
-  persist: {
-    key: 'resviz-message-store',
-    storage: sessionStorage,
-    paths: ['messages']
   }
 })

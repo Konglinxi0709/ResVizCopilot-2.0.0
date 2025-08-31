@@ -1,0 +1,539 @@
+<template>
+  <div class="message-list">
+    <!-- 消息列表容器 -->
+    <div 
+      ref="messageContainer" 
+      class="message-container"
+      @scroll="handleScroll"
+    >
+      <!-- 加载状态 -->
+      <div v-if="isLoading && messages.length === 0" class="loading-state">
+        <el-skeleton :rows="3" animated />
+        <div class="loading-text">正在加载消息...</div>
+      </div>
+      
+      <!-- 空状态 -->
+      <div v-else-if="messages.length === 0" class="empty-state">
+        <el-icon size="64" color="#C0C4CC"><ChatDotRound /></el-icon>
+        <h3>暂无消息</h3>
+        <p>开始与智能体对话吧</p>
+      </div>
+      
+      <!-- 消息列表 -->
+      <div v-else class="messages-wrapper">
+        <!-- 虚拟滚动优化 -->
+        <RecycleScroller
+          v-if="enableVirtualScroll && messages.length > virtualScrollThreshold"
+          class="virtual-scroller"
+          :items="messages"
+          :item-size="estimatedItemSize"
+          key-field="id"
+          v-slot="{ item }"
+        >
+          <MessageItem
+            :key="item.id"
+            :message="item"
+            @view-snapshot="handleViewSnapshot"
+            @rollback="handleRollback"
+            @stop-generation="handleStopGeneration"
+          />
+        </RecycleScroller>
+        
+        <!-- 常规渲染 -->
+        <template v-else>
+          <MessageItem
+            v-for="message in messages"
+            :key="message.id"
+            :message="message"
+            @view-snapshot="handleViewSnapshot"
+            @rollback="handleRollback"
+            @stop-generation="handleStopGeneration"
+          />
+        </template>
+      </div>
+      
+      <!-- 滚动到底部按钮 -->
+      <transition name="fade">
+        <div 
+          v-if="showScrollToBottom" 
+          class="scroll-to-bottom"
+          @click="scrollToBottom"
+        >
+          <el-button type="primary" circle>
+            <el-icon><ArrowDown /></el-icon>
+          </el-button>
+          <span v-if="unreadCount > 0" class="unread-badge">{{ unreadCount }}</span>
+        </div>
+      </transition>
+    </div>
+    
+    <!-- 生成状态指示器 -->
+    <transition name="slide-up">
+      <div v-if="isGenerating" class="generating-indicator">
+        <div class="indicator-content">
+          <el-icon class="loading-icon"><Loading /></el-icon>
+          <span class="indicator-text">{{ currentAgentName || '智能体' }} 正在思考和回复...</span>
+          <el-button 
+            type="danger" 
+            size="small" 
+            @click="handleStopGeneration"
+            :loading="stoppingGeneration"
+          >
+            <el-icon><VideoPause /></el-icon>
+            停止生成
+          </el-button>
+        </div>
+      </div>
+    </transition>
+  </div>
+</template>
+
+<script>
+import { defineComponent, ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { 
+  ChatDotRound, ArrowDown, Loading, VideoPause 
+} from '@element-plus/icons-vue'
+import { useMessageStore } from '@/stores/messageStore'
+import { useTreeStore } from '@/stores/treeStore'
+import MessageItem from './MessageItem.vue'
+// import { RecycleScroller } from 'vue-virtual-scroller' // 可选的虚拟滚动
+
+export default defineComponent({
+  name: 'MessageList',
+  
+  components: {
+    MessageItem,
+    ChatDotRound, ArrowDown, Loading, VideoPause
+    // RecycleScroller // 需要安装 vue-virtual-scroller
+  },
+  
+  props: {
+    // 是否启用虚拟滚动
+    enableVirtualScroll: {
+      type: Boolean,
+      default: false
+    },
+    
+    // 虚拟滚动阈值
+    virtualScrollThreshold: {
+      type: Number,
+      default: 50
+    },
+    
+    // 预估项目高度
+    estimatedItemSize: {
+      type: Number,
+      default: 200
+    },
+    
+    // 是否自动滚动到底部
+    autoScrollToBottom: {
+      type: Boolean,
+      default: true
+    }
+  },
+  
+  emits: ['view-snapshot'],
+  
+  setup(props, { emit }) {
+    const messageStore = useMessageStore()
+    const treeStore = useTreeStore()
+    
+    // 响应式引用
+    const messageContainer = ref(null)
+    const showScrollToBottom = ref(false)
+    const unreadCount = ref(0)
+    const stoppingGeneration = ref(false)
+    const lastScrollTop = ref(0)
+    const userScrolledUp = ref(false)
+    
+    // 计算属性
+    const messages = computed(() => messageStore.messages)
+    const isLoading = computed(() => messageStore.isLoading)
+    const isGenerating = computed(() => messageStore.isGenerating)
+    const currentAgentName = computed(() => messageStore.currentAgentName)
+    
+    // 滚动处理
+    const handleScroll = () => {
+      if (!messageContainer.value) return
+      
+      const { scrollTop, scrollHeight, clientHeight } = messageContainer.value
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50
+      
+      // 更新滚动状态
+      showScrollToBottom.value = !isAtBottom
+      userScrolledUp.value = scrollTop < lastScrollTop.value
+      lastScrollTop.value = scrollTop
+      
+      // 如果滚动到底部，清除未读计数
+      if (isAtBottom) {
+        unreadCount.value = 0
+      }
+    }
+    
+    // 滚动到底部
+    const scrollToBottom = async () => {
+      await nextTick()
+      if (messageContainer.value) {
+        messageContainer.value.scrollTo({
+          top: messageContainer.value.scrollHeight,
+          behavior: 'smooth'
+        })
+      }
+      unreadCount.value = 0
+    }
+    
+    // 查看快照
+    const handleViewSnapshot = async (snapshotId) => {
+      try {
+        console.log('查看快照:', snapshotId)
+        
+        // 通过treeStore查看快照
+        await treeStore.viewSnapshot(snapshotId)
+        
+        // 通知父组件
+        emit('view-snapshot', snapshotId)
+        
+        ElMessage.success('快照加载成功')
+      } catch (error) {
+        console.error('查看快照失败:', error)
+        ElMessage.error('查看快照失败')
+      }
+    }
+    
+    // 回溯消息
+    const handleRollback = async (messageId) => {
+      try {
+        console.log('回溯到消息:', messageId)
+        
+        await messageStore.rollbackToMessage(messageId)
+        
+        ElMessage.success('回溯操作成功')
+        
+        // 滚动到回溯点
+        await nextTick()
+        scrollToBottom()
+        
+      } catch (error) {
+        console.error('回溯失败:', error)
+        ElMessage.error('回溯操作失败')
+      }
+    }
+    
+    // 停止生成
+    const handleStopGeneration = async () => {
+      try {
+        stoppingGeneration.value = true
+        
+        const success = await messageStore.sendInterruptRequest()
+        
+        if (success) {
+          ElMessage.success('已停止生成')
+        } else {
+          ElMessage.error('停止生成失败')
+        }
+      } catch (error) {
+        console.error('停止生成失败:', error)
+        ElMessage.error('停止生成失败')
+      } finally {
+        stoppingGeneration.value = false
+      }
+    }
+    
+    // 监听消息变化，自动滚动到底部
+    watch(
+      () => messages.value.length,
+      async (newLength, oldLength) => {
+        if (newLength > oldLength) {
+          // 有新消息
+          if (props.autoScrollToBottom && !userScrolledUp.value) {
+            await nextTick()
+            scrollToBottom()
+          } else if (userScrolledUp.value) {
+            // 用户向上滚动了，增加未读计数
+            unreadCount.value += (newLength - oldLength)
+          }
+        }
+      }
+    )
+    
+    // 监听正在生成的消息内容变化，自动滚动
+    watch(
+      () => {
+        const generatingMessage = messageStore.getIncompleteMessage
+        return generatingMessage ? generatingMessage.content + generatingMessage.thinking : ''
+      },
+      async () => {
+        if (props.autoScrollToBottom && !userScrolledUp.value) {
+          await nextTick()
+          // 使用requestAnimationFrame确保DOM更新后再滚动
+          requestAnimationFrame(() => {
+            if (messageContainer.value) {
+              messageContainer.value.scrollTop = messageContainer.value.scrollHeight
+            }
+          })
+        }
+      }
+    )
+    
+    // 组件挂载时滚动到底部
+    onMounted(async () => {
+      await nextTick()
+      scrollToBottom()
+    })
+    
+    // 键盘快捷键
+    const handleKeydown = (event) => {
+      if (event.key === 'End' && event.ctrlKey) {
+        // Ctrl+End 滚动到底部
+        scrollToBottom()
+        event.preventDefault()
+      } else if (event.key === 'Home' && event.ctrlKey) {
+        // Ctrl+Home 滚动到顶部
+        if (messageContainer.value) {
+          messageContainer.value.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+          })
+        }
+        event.preventDefault()
+      }
+    }
+    
+    onMounted(() => {
+      document.addEventListener('keydown', handleKeydown)
+    })
+    
+    onBeforeUnmount(() => {
+      document.removeEventListener('keydown', handleKeydown)
+    })
+    
+    return {
+      messageContainer,
+      messages,
+      isLoading,
+      isGenerating,
+      currentAgentName,
+      showScrollToBottom,
+      unreadCount,
+      stoppingGeneration,
+      handleScroll,
+      scrollToBottom,
+      handleViewSnapshot,
+      handleRollback,
+      handleStopGeneration
+    }
+  }
+})
+</script>
+
+<style scoped>
+.message-list {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.message-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  scroll-behavior: smooth;
+}
+
+/* 自定义滚动条 */
+.message-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.message-container::-webkit-scrollbar-track {
+  background: var(--bg-color-light, #f5f5f5);
+  border-radius: 3px;
+}
+
+.message-container::-webkit-scrollbar-thumb {
+  background: var(--border-color, #dcdfe6);
+  border-radius: 3px;
+}
+
+.message-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color-placeholder, #c0c4cc);
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 16px;
+}
+
+.loading-text {
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+.empty-state h3 {
+  margin: 16px 0 8px 0;
+  font-size: 18px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* 消息包装器 */
+.messages-wrapper {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 虚拟滚动器 */
+.virtual-scroller {
+  height: 100%;
+}
+
+/* 滚动到底部按钮 */
+.scroll-to-bottom {
+  position: fixed;
+  bottom: 120px;
+  right: 30px;
+  z-index: 100;
+  cursor: pointer;
+}
+
+.scroll-to-bottom .el-button {
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+.unread-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--danger-color);
+  color: white;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* 生成状态指示器 */
+.generating-indicator {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: var(--warning-color);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 25px;
+  box-shadow: 0 4px 12px rgba(230, 162, 60, 0.3);
+}
+
+.indicator-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.indicator-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 动画效果 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateX(-50%) translateY(20px);
+  opacity: 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 767px) {
+  .message-container {
+    padding: 12px;
+  }
+  
+  .scroll-to-bottom {
+    bottom: 100px;
+    right: 20px;
+  }
+  
+  .generating-indicator {
+    bottom: 60px;
+    left: 20px;
+    right: 20px;
+    transform: none;
+    border-radius: 12px;
+  }
+  
+  .indicator-content {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .indicator-text {
+    font-size: 13px;
+  }
+}
+
+/* 无障碍支持 */
+@media (prefers-reduced-motion: reduce) {
+  .message-container {
+    scroll-behavior: auto;
+  }
+  
+  .loading-icon {
+    animation: none;
+  }
+  
+  .generating-indicator {
+    animation: none;
+  }
+}
+</style>
