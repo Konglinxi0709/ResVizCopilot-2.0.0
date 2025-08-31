@@ -38,13 +38,15 @@
     <!-- 调试信息 -->
     <div v-if="!hasData" class="debug-info">
       <div class="debug-overlay">
-        <h3>调试信息</h3>
+        <h3>🐛 Mind-elixir调试信息</h3>
         <p>hasData: {{ hasData }}</p>
         <p>mindElixirData: {{ !!mindElixirData }}</p>
         <p>nodeData: {{ !!mindElixirData?.nodeData }}</p>
         <p>mind实例: {{ !!mind }}</p>
         <p>isInitialized: {{ isInitialized }}</p>
-        <el-button type="primary" @click="$emit('refresh-data')">重新加载</el-button>
+        <div style="margin-top: 10px;">
+          <el-button type="primary" @click="$emit('refresh-data')" size="small">重新加载</el-button>
+        </div>
       </div>
     </div>
   </div>
@@ -174,7 +176,7 @@ export default defineComponent({
            draggable: false,
            editable: false,
            contextMenu: false,
-           toolBar: false,
+           //toolBar: false,
            nodeMenu: false,
            keypress: false,
            
@@ -262,7 +264,7 @@ export default defineComponent({
             if (this.mind.layout) {
               this.mind.layout()
             }
-            // 尝试手动绘制
+                        // 尝试手动绘制
             if (this.mind.painter.draw) {
               this.mind.painter.draw()
             }
@@ -321,6 +323,8 @@ export default defineComponent({
       return processedData
     },
     
+
+    
     // 处理节点选择事件
     handleNodeSelect(nodeObj) {
       if (!nodeObj || nodeObj.id === 'root') {
@@ -359,7 +363,9 @@ export default defineComponent({
       this.$nextTick(() => {
         this.initMindElixir()
       })
-    }
+    },
+    
+
   }
 })
 </script>
@@ -369,15 +375,17 @@ export default defineComponent({
   position: relative;
   width: 100%;
   height: 100%;
+  max-height: 100%; /* 确保不超过父容器高度 */
   overflow: hidden;
 }
 
 .mind-elixir-canvas {
   width: 100%;
   height: 100%;
+  max-height: 100%; /* 确保不超过父容器高度 */
   background: #ffffff; /* 白色背景 */
   transition: all 0.3s ease;
-  min-height: 400px;
+  min-height: 300px; /* 减小最小高度，避免强制撑开 */
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -517,39 +525,25 @@ export default defineComponent({
 }
 </style>
 
-<!-- Mind-elixir 专用样式 -->
-<style>
-/* Mind-elixir 容器样式 */
+<!-- Mind-elixir 专用样式 - 现代化设计 -->
+<style scoped>
 .mind-elixir-wrapper {
   position: relative;
   width: 100%;
   height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 }
+</style>
 
-.mind-elixir-wrapper * {
-  box-sizing: border-box;
-}
-
-/* 强制设置Mind-elixir亮色主题 */
+<!-- 基本样式 - 保持简洁 -->
+<style>
+/* 确保Mind-elixir正常显示 */
 .mind-elixir-wrapper .mind-elixir {
-  background-color: #ffffff !important;
-  color: #303133 !important;
+  background-color: #ffffff;
+  color: #333333;
 }
 
-/* 确保SVG背景也是白色的 */
 .mind-elixir-wrapper .mind-elixir svg {
-  background-color: #ffffff !important;
-}
-
-/* 节点样式 */
-.mind-elixir-wrapper .mind-elixir .node {
-  color: #303133 !important;
-  background-color: #f5f7fa !important;
-  border: 1px solid #dcdfe6 !important;
-}
-
-/* 连接线样式 */
-.mind-elixir-wrapper .mind-elixir .line {
-  stroke: #606266 !important;
+  background-color: #ffffff;
 }
 </style>

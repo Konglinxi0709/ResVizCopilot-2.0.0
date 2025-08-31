@@ -194,9 +194,18 @@ class ApiService {
     apiClient.defaults.baseURL = baseURL
   }
   
-  // 设置超时时间
+  // 设置请求超时时间
   setTimeout(timeout) {
     apiClient.defaults.timeout = timeout
+  }
+  
+  // 获取当前配置
+  getConfig() {
+    return {
+      baseURL: apiClient.defaults.baseURL,
+      timeout: apiClient.defaults.timeout,
+      headers: { ...apiClient.defaults.headers }
+    }
   }
 }
 

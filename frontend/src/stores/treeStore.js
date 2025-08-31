@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { apiService } from '../services/apiService'
+import { useProjectStore } from './projectStore'
 
 export const useTreeStore = defineStore('tree', {
   state: () => ({
@@ -69,15 +70,34 @@ export const useTreeStore = defineStore('tree', {
       this.error = null
     },
     
-    // 加载当前快照
+    // 获取当前工程的完整数据（包括当前快照ID）
+    async getCurrentProjectData() {
+      const projectStore = useProjectStore()
+      const data = await projectStore.getCurrentProjectFullData()
+      return { data } // 包装成与原API响应一致的格式
+    },
+    
+    // 加载当前快照（使用真实的快照ID）
     async loadCurrentSnapshot() {
       try {
         this.setLoading(true)
         this.clearError()
         
-        const response = await apiService.get('/research-tree/snapshots/current')
-        this.currentSnapshot = response.data
+        // 1. 先获取工程数据，得到当前快照ID
+        const projectData = await this.getCurrentProjectData()
+        const currentSnapshotId = projectData.data?.current_snapshot_id
         
+        if (!currentSnapshotId) {
+          console.warn('当前工程没有快照数据')
+          this.currentSnapshot = { roots: [] }
+          return this.currentSnapshot
+        }
+        
+        // 2. 使用真实的快照ID获取快照数据
+        const snapshotData = await this.getSnapshot(currentSnapshotId)
+        this.currentSnapshot = snapshotData
+        
+        console.log('✅ 当前快照加载成功:', this.currentSnapshot)
         return this.currentSnapshot
       } catch (error) {
         console.error('加载当前快照失败:', error)
@@ -85,6 +105,28 @@ export const useTreeStore = defineStore('tree', {
         throw error
       } finally {
         this.setLoading(false)
+      }
+    },
+    
+    // 获取当前快照（组合方法，用于外部调用）
+    async getCurrentSnapshot() {
+      try {
+        // 先获取工程数据，得到当前快照ID
+        const projectData = await this.getCurrentProjectData()
+        const currentSnapshotId = projectData.data?.current_snapshot_id
+        
+        if (!currentSnapshotId) {
+          console.warn('当前工程没有快照数据')
+          return { data: { roots: [] } }
+        }
+        
+        // 使用真实的快照ID获取快照数据
+        const response = await apiService.get(`/research-tree/snapshots/${currentSnapshotId}`)
+        console.log('获取当前快照成功:', response)
+        return response
+      } catch (error) {
+        console.error('获取当前快照失败:', error)
+        throw error
       }
     },
     

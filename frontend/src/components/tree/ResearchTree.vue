@@ -34,8 +34,17 @@
           </div>
         </div>
         <div class="debug-actions">
+          <el-button 
+            size="small" 
+            type="primary"
+            @click="loadCurrentSnapshotFromBackend"
+            :loading="isLoadingData"
+          >
+            从后端加载数据
+          </el-button>
           <el-button size="small" @click="loadTestData">加载测试数据</el-button>
-          <el-button size="small" @click="loadSnapshotTestData">加载快照测试</el-button>
+          <el-button size="small" @click="loadSnapshotTestData">快照测试</el-button>
+          <el-button size="small" @click="loadMockBackendData">模拟后端数据</el-button>
           <el-button size="small" @click="simulateAgentOperation">模拟智能体操作</el-button>
           <el-button size="small" @click="clearTestData">清除数据</el-button>
         </div>
@@ -73,9 +82,12 @@ import { defineComponent } from 'vue'
 import { Close, Setting } from '@element-plus/icons-vue'
 import MindElixirWrapper from './MindElixirWrapper.vue'
 import { 
-  simpleMindElixirData, 
-  styledMindElixirData 
-} from '@/data/simpleMindElixirData'
+  testMindElixirData,
+  testSnapshotMindElixirData,
+  mockBackendSnapshotData
+} from '@/data/testMindElixirData'
+import { ResearchTreeTransformer } from '@/services/ResearchTreeTransformer'
+import { useTreeStore } from '@/stores/treeStore'
 
 export default defineComponent({
   name: 'ResearchTree',
@@ -116,7 +128,13 @@ export default defineComponent({
       currentMindElixirData: null,
       
       // 测试用的智能体操作节点ID
-      testAgentNodeId: null
+      testAgentNodeId: null,
+      
+      // 数据转换器实例
+      transformer: new ResearchTreeTransformer(),
+      
+      // 是否正在加载数据
+      isLoadingData: false
     }
   },
   
@@ -147,18 +165,84 @@ export default defineComponent({
     
     // 加载测试数据
     loadTestData() {
-      console.log('加载简单Mind-elixir测试数据')
-      this.currentMindElixirData = simpleMindElixirData
+      console.log('🎨 加载现代化Mind-elixir测试数据')
+      this.currentMindElixirData = testMindElixirData
       this.testAgentNodeId = null
-      this.$message.success('简单测试数据加载成功')
+      this.$message.success('现代化测试数据加载成功')
     },
     
     // 加载快照测试数据
     loadSnapshotTestData() {
-      console.log('加载样式测试数据')
-      this.currentMindElixirData = styledMindElixirData
+      console.log('📸 加载快照查看测试数据')
+      this.currentMindElixirData = testSnapshotMindElixirData
       this.testAgentNodeId = null
-      this.$message.success('样式测试数据加载成功')
+      this.$message.success('快照测试数据加载成功')
+    },
+    
+    // 从后端加载当前快照数据
+    async loadCurrentSnapshotFromBackend() {
+      console.log('🔄 开始从后端加载当前快照数据')
+      this.isLoadingData = true
+      
+      try {
+        // 使用treeStore获取当前快照数据
+        const treeStore = useTreeStore()
+        const snapshotResponse = await treeStore.getCurrentSnapshot()
+        
+        if (snapshotResponse && snapshotResponse.data) {
+          console.log('✅ 后端快照数据获取成功:', snapshotResponse.data)
+          
+          // 使用转换器转换数据
+          const context = {
+            selectedSolutionIds: this.transformer.extractSelectedSolutionIds(snapshotResponse.data)
+          }
+          
+          const mindElixirData = this.transformer.transformToMindElixir(snapshotResponse.data, context)
+          
+          console.log('🎨 数据转换完成:', mindElixirData)
+          
+          // 应用转换后的数据
+          this.currentMindElixirData = mindElixirData
+          this.testAgentNodeId = null
+          
+          this.$message.success('后端数据加载成功')
+        } else {
+          console.warn('⚠️ 当前工程没有快照数据')
+          this.currentMindElixirData = {
+            nodeData: {
+              id: 'empty-root',
+              topic: '当前工程暂无数据',
+              children: []
+            }
+          }
+          this.$message.warning('当前工程没有快照数据')
+        }
+        
+      } catch (error) {
+        console.error('❌ 从后端加载快照数据失败:', error)
+        this.$message.warning(`后端连接失败，使用模拟数据: ${error.message}`)
+        
+        // 连接失败时使用模拟数据
+        this.loadMockBackendData()
+      } finally {
+        this.isLoadingData = false
+      }
+    },
+    
+    // 加载模拟的后端数据
+    loadMockBackendData() {
+      console.log('🔄 加载模拟后端数据')
+      
+      const context = {
+        selectedSolutionIds: this.transformer.extractSelectedSolutionIds(mockBackendSnapshotData)
+      }
+      
+      const mindElixirData = this.transformer.transformToMindElixir(mockBackendSnapshotData, context)
+      
+      this.currentMindElixirData = mindElixirData
+      this.testAgentNodeId = null
+      
+      this.$message.info('已加载模拟后端数据（用于演示）')
     },
     
     // 模拟智能体操作
@@ -195,16 +279,20 @@ export default defineComponent({
 <style scoped>
 .research-tree {
   position: relative;
-  height: 100%;
+  height: 100%; /* 使用父容器的100%高度（center-panel已经减去了AppHeader） */
+  max-height: 100%; /* 确保不超过父容器高度 */
   display: flex;
   flex-direction: column;
   background: var(--bg-color);
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 .tree-container {
   flex: 1;
   position: relative;
-  min-height: 400px;
+  min-height: 300px; /* 减小最小高度 */
+  max-height: 100%; /* 使用父容器的全部可用高度 */
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 /* 调试面板样式 */
@@ -214,6 +302,8 @@ export default defineComponent({
   left: 20px;
   z-index: 1000;
   max-width: 400px;
+  max-height: calc(100% - 40px); /* 确保调试面板不超出容器 */
+  overflow-y: auto; /* 如果内容过多，允许滚动 */
 }
 
 .debug-card {
@@ -270,6 +360,11 @@ export default defineComponent({
     left: 10px;
     right: 10px;
     max-width: none;
+    max-height: calc(100vh - 20px); /* 在移动端确保不超过视口 */
+  }
+  
+  .tree-container {
+    min-height: 250px; /* 移动端减小最小高度 */
   }
   
   .debug-toggle {
