@@ -273,7 +273,7 @@ export default defineComponent({
 /* 全局样式变量 */
 :root {
   --header-height: 60px;
-  --panel-header-height: 50px;
+  --panel-header-height: 60px; /* 增加到60px */
   --sidebar-width: 300px;
   --sidebar-collapsed-width: 50px;
   
@@ -350,13 +350,16 @@ body {
 }
 
 .panel-header {
-  height: var(--panel-header-height);
+  height: var(--panel-header-height) !important;
+  min-height: 60px !important; /* 强制最小高度 */
+  max-height: 60px !important; /* 强制最大高度 */
   padding: 0 16px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
   background-color: var(--bg-color);
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
 .panel-header h3 {
@@ -415,14 +418,15 @@ body {
   }
   
   .left-panel,
-  .right-panel,
-  .center-panel {
+  .right-panel {
     width: 100%;
-    height: 33.33%;
+    height: 200px; /* 固定高度而不是百分比 */
   }
   
   .center-panel {
+    flex: 1; /* 占据剩余空间 */
     min-width: auto;
+    min-height: 400px; /* 确保最小高度 */
   }
 }
 </style>

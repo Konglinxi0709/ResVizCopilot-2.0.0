@@ -15,7 +15,7 @@
     "element-plus": "^2.11.1",
     "lodash": "^4.17.21",
     "markdown-it": "^14.1.0",
-    "mind-elixir": "^5.0.6",
+    "mind-elixir": "^4.5.2",
     "pinia": "^3.0.3",
     "pinia-plugin-persistedstate": "^4.5.0",
     "vue": "^3.2.13",
