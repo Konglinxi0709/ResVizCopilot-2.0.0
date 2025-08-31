@@ -35,13 +35,13 @@
         </div>
         
         <div v-else class="project-list">
-          <div 
-            v-for="project in projectList" 
-            :key="project.name"
-            class="project-card"
-            :class="{ active: isCurrentProject(project) }"
-            @click="handleLoadProject(project)"
-          >
+          <template v-for="project in projectList" :key="project?.name || 'unknown'">
+            <div 
+              v-if="project && project.name"
+              class="project-card"
+              :class="{ active: isCurrentProject(project) }"
+              @click="handleLoadProject(project)"
+            >
             <div class="project-info">
               <div class="project-name">{{ project.name }}</div>
               <div class="project-meta">
@@ -72,6 +72,7 @@
               </el-dropdown>
             </div>
           </div>
+        </template>
         </div>
       </div>
     </div>
@@ -179,12 +180,13 @@ export default defineComponent({
     
     // 检查是否为当前工程
     isCurrentProject(project) {
-      return this.currentProject?.name === project.name
+      return this.currentProject?.name && project?.name && 
+             this.currentProject.name === project.name
     },
     
     // 处理加载工程
     async handleLoadProject(project) {
-      if (this.isCurrentProject(project)) {
+      if (!project?.name || this.isCurrentProject(project)) {
         return
       }
       
@@ -212,6 +214,11 @@ export default defineComponent({
     
     // 处理删除工程
     async handleDeleteProject(project) {
+      if (!project?.name) {
+        ElMessage.error('无效的工程信息')
+        return
+      }
+      
       try {
         await ElMessageBox.confirm(
           `确定要删除工程 "${project.name}" 吗？此操作不可恢复。`,

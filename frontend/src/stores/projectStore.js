@@ -67,15 +67,17 @@ export const useProjectStore = defineStore('project', {
         
         const response = await apiService.get('/projects')
         
-        // 处理后端返回的数据结构
+        // 处理后端返回的数据结构（apiService已经返回了response.data）
         if (response.success && response.projects) {
-          // 转换数据格式，将 project_name 转为 name
-          this.projectList = response.projects.map(project => ({
-            name: project.project_name,
-            created_at: project.created_at,
-            updated_at: project.updated_at,
-            file_path: project.file_path
-          }))
+          // 转换数据格式，将 project_name 转为 name，过滤掉无效数据
+          this.projectList = response.projects
+            .filter(project => project && project.project_name) // 过滤掉空值和缺少project_name的项
+            .map(project => ({
+              name: project.project_name,
+              created_at: project.created_at,
+              updated_at: project.updated_at,
+              file_path: project.file_path
+            }))
         } else {
           this.projectList = []
         }
@@ -103,10 +105,16 @@ export const useProjectStore = defineStore('project', {
         
         const response = await apiService.post(`/projects?project_name=${encodeURIComponent(projectName)}`)
         
-        const newProject = response.data
+        const newProject = {
+          name: response.project_name || projectName,
+          created_at: response.created_at,
+          updated_at: response.updated_at
+        }
         
-        // 更新工程列表
-        this.projectList.push(newProject)
+        // 更新工程列表（只有当newProject有效时才添加）
+        if (newProject && newProject.name) {
+          this.projectList.push(newProject)
+        }
         
         // 设置为当前工程
         this.currentProject = newProject
@@ -129,7 +137,11 @@ export const useProjectStore = defineStore('project', {
         this.clearError()
         
         const response = await apiService.get(`/projects/${projectName}`)
-        const project = response.data
+        const project = {
+          name: response.project_name || projectName,
+          created_at: response.created_at,
+          updated_at: response.updated_at
+        }
         
         // 设置为当前工程
         this.currentProject = project
@@ -181,12 +193,18 @@ export const useProjectStore = defineStore('project', {
           throw new Error(`工程名称 "${newProjectName}" 已存在`)
         }
         
-        const response = await apiService.post(`/projects/save-as?project_name=${encodeURIComponent(newProjectName)}`)
+        const response = await apiService.post(`/projects/save-as?new_project_name=${encodeURIComponent(newProjectName)}`)
         
-        const newProject = response.data
+        const newProject = {
+          name: response.project_name || newProjectName,
+          created_at: response.created_at,
+          updated_at: response.updated_at
+        }
         
-        // 更新工程列表
-        this.projectList.push(newProject)
+        // 更新工程列表（只有当newProject有效时才添加）
+        if (newProject && newProject.name) {
+          this.projectList.push(newProject)
+        }
         
         // 设置为当前工程
         this.currentProject = newProject
