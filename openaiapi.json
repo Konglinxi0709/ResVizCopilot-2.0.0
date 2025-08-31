@@ -1,0 +1,1055 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "ResVizCopilot 2.0 Backend",
+      "description": "科研智能体项目后端API，支持研究树管理、智能体流式交互和工程管理",
+      "version": "2.0.0"
+    },
+    "paths": {
+      "/research-tree/snapshots/{snapshot_id}": {
+        "get": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Get Snapshot",
+          "operationId": "get_snapshot_research_tree_snapshots__snapshot_id__get",
+          "parameters": [
+            {
+              "name": "snapshot_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Snapshot Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/research-tree/problems/root": {
+        "post": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Create Root Problem",
+          "operationId": "create_root_problem_research_tree_problems_root_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/research-tree/problems/root/{problem_id}": {
+        "patch": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Update Root Problem",
+          "operationId": "update_root_problem_research_tree_problems_root__problem_id__patch",
+          "parameters": [
+            {
+              "name": "problem_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Problem Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Delete Root Problem",
+          "operationId": "delete_root_problem_research_tree_problems_root__problem_id__delete",
+          "parameters": [
+            {
+              "name": "problem_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Problem Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/research-tree/problems/{problem_id}/solutions": {
+        "post": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Create Solution",
+          "operationId": "create_solution_research_tree_problems__problem_id__solutions_post",
+          "parameters": [
+            {
+              "name": "problem_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Problem Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/research-tree/solutions/{solution_id}": {
+        "delete": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Delete Solution",
+          "operationId": "delete_solution_research_tree_solutions__solution_id__delete",
+          "parameters": [
+            {
+              "name": "solution_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Solution Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "patch": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Update Solution",
+          "operationId": "update_solution_research_tree_solutions__solution_id__patch",
+          "parameters": [
+            {
+              "name": "solution_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Solution Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolutionRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/research-tree/problems/{problem_id}/selected-solution": {
+        "post": {
+          "tags": [
+            "research-tree"
+          ],
+          "summary": "Set Selected Solution",
+          "operationId": "set_selected_solution_research_tree_problems__problem_id__selected_solution_post",
+          "parameters": [
+            {
+              "name": "problem_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Problem Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetSelectedSolutionRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/agents/messages": {
+        "post": {
+          "tags": [
+            "智能体接口"
+          ],
+          "summary": "Sse Send Message",
+          "description": "发送用户消息，启动智能体协程，返回SSE流式响应\n\nArgs:\n    request: 发送消息请求\n    \nReturns:\n    SSE流式响应",
+          "operationId": "sse_send_message_agents_messages_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendMessageRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/agents/messages/continue/{message_id}": {
+        "get": {
+          "tags": [
+            "智能体接口"
+          ],
+          "summary": "Sse Continue Message",
+          "description": "继续未完成的消息，先同步历史内容，再继续监听新内容\n\nArgs:\n    message_id: 要继续的消息ID\n    \nReturns:\n    SSE流式响应",
+          "operationId": "sse_continue_message_agents_messages_continue__message_id__get",
+          "parameters": [
+            {
+              "name": "message_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Message Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/agents/messages/stop": {
+        "post": {
+          "tags": [
+            "智能体接口"
+          ],
+          "summary": "Stop Generation",
+          "description": "停止当前生成任务，取消智能体协程\n\nReturns:\n    停止响应",
+          "operationId": "stop_generation_agents_messages_stop_post",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/StopResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/agents/status": {
+        "get": {
+          "tags": [
+            "智能体接口"
+          ],
+          "summary": "Get Agent Status",
+          "description": "获取智能体状态\n\nReturns:\n    智能体状态信息",
+          "operationId": "get_agent_status_agents_status_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/projects": {
+        "post": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "Create Project",
+          "description": "创建新工程\n\nArgs:\n    project_name: 工程名称\n    \nReturns:\n    创建结果",
+          "operationId": "create_project_projects_post",
+          "parameters": [
+            {
+              "name": "project_name",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Project Name"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "List Projects",
+          "description": "获取工程列表\n\nReturns:\n    工程列表",
+          "operationId": "list_projects_projects_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/projects/save": {
+        "post": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "Save Current Project",
+          "description": "保存当前工程\n\nReturns:\n    保存结果",
+          "operationId": "save_current_project_projects_save_post",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/projects/save-as": {
+        "post": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "Save As Current Project",
+          "description": "将当前工程另存为\n\nArgs:\n    new_project_name: 新的工程名称\n    \nReturns:\n    另存为结果",
+          "operationId": "save_as_current_project_projects_save_as_post",
+          "parameters": [
+            {
+              "name": "new_project_name",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "New Project Name"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/projects/{project_name}": {
+        "get": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "Load Project",
+          "description": "加载指定工程\n\nArgs:\n    project_name: 工程名称\n    \nReturns:\n    加载结果",
+          "operationId": "load_project_projects__project_name__get",
+          "parameters": [
+            {
+              "name": "project_name",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Project Name"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "Delete Project",
+          "description": "删除指定工程\n\nArgs:\n    project_name: 工程名称\n    \nReturns:\n    删除结果",
+          "operationId": "delete_project_projects__project_name__delete",
+          "parameters": [
+            {
+              "name": "project_name",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Project Name"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/projects/current/info": {
+        "get": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "Get Current Project Info",
+          "description": "获取当前工程信息\n\nReturns:\n    当前工程信息",
+          "operationId": "get_current_project_info_projects_current_info_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/projects/current/full-data": {
+        "get": {
+          "tags": [
+            "projects"
+          ],
+          "summary": "Get Current Project Full Data",
+          "description": "获取当前工程的完整数据，包括消息历史和工程信息\n这个接口完全保留 /agents/messages/history 的数据格式，并添加工程相关信息\n\nReturns:\n    包含消息历史和工程信息的完整数据",
+          "operationId": "get_current_project_full_data_projects_current_full_data_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/": {
+        "get": {
+          "summary": "Root",
+          "description": "根路径",
+          "operationId": "root__get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/healthz": {
+        "get": {
+          "summary": "Healthz",
+          "description": "健康检查",
+          "operationId": "healthz_healthz_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "ProblemRequest": {
+          "properties": {
+            "id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id"
+            },
+            "title": {
+              "type": "string",
+              "title": "Title"
+            },
+            "significance": {
+              "type": "string",
+              "title": "Significance"
+            },
+            "criteria": {
+              "type": "string",
+              "title": "Criteria"
+            },
+            "problem_type": {
+              "$ref": "#/components/schemas/ProblemType",
+              "default": "implementation"
+            }
+          },
+          "type": "object",
+          "required": [
+            "title",
+            "significance",
+            "criteria"
+          ],
+          "title": "ProblemRequest"
+        },
+        "ProblemType": {
+          "type": "string",
+          "enum": [
+            "implementation",
+            "conditional"
+          ],
+          "title": "ProblemType"
+        },
+        "SendMessageRequest": {
+          "properties": {
+            "content": {
+              "type": "string",
+              "title": "Content",
+              "description": "消息内容"
+            },
+            "title": {
+              "type": "string",
+              "title": "Title",
+              "description": "消息标题",
+              "default": "用户消息"
+            },
+            "agent_name": {
+              "type": "string",
+              "title": "Agent Name",
+              "description": "调用的智能体名称",
+              "default": "auto_research_agent"
+            },
+            "other_params": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Other Params",
+              "description": "其他参数"
+            }
+          },
+          "type": "object",
+          "required": [
+            "content"
+          ],
+          "title": "SendMessageRequest",
+          "description": "发送消息请求"
+        },
+        "SetSelectedSolutionRequest": {
+          "properties": {
+            "solution_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Solution Id"
+            }
+          },
+          "type": "object",
+          "title": "SetSelectedSolutionRequest"
+        },
+        "SolutionRequest": {
+          "properties": {
+            "title": {
+              "type": "string",
+              "title": "Title"
+            },
+            "top_level_thoughts": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Top Level Thoughts"
+            },
+            "implementation_plan": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Implementation Plan"
+            },
+            "plan_justification": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Plan Justification"
+            },
+            "state": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SolutionState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "in_progress"
+            },
+            "final_report": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final Report"
+            },
+            "children": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ProblemRequest"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Children"
+            }
+          },
+          "type": "object",
+          "required": [
+            "title"
+          ],
+          "title": "SolutionRequest"
+        },
+        "SolutionState": {
+          "type": "string",
+          "enum": [
+            "success",
+            "failure",
+            "in_progress"
+          ],
+          "title": "SolutionState"
+        },
+        "StopResponse": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status",
+              "description": "状态"
+            },
+            "message": {
+              "type": "string",
+              "title": "Message",
+              "description": "响应消息"
+            }
+          },
+          "type": "object",
+          "required": [
+            "status",
+            "message"
+          ],
+          "title": "StopResponse",
+          "description": "停止响应"
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            }
+          },
+          "type": "object",
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError"
+        }
+      }
+    }
+  }

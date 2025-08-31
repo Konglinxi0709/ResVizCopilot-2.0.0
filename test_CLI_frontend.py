@@ -421,6 +421,79 @@ class StreamMessageClient:
         else:
             print("❌ 请输入有效的数字")
 
+    async def handle_rollback_to_message(self) -> None:
+        """处理回退到指定消息操作"""
+        print("\n🔄 回退到指定消息")
+        
+        if not self.messages:
+            print("❌ 当前没有消息，无法执行回退操作")
+            input("按回车键继续...")
+            return
+        
+        while True:
+            try:
+                message_index_input = input("\n请输入要回退到的消息编号（该消息之后的消息将被删除）: ").strip()
+                if message_index_input.lower() == 'q':
+                    print("❌ 取消回退操作")
+                    return
+                
+                message_index = int(message_index_input)
+                if 1 <= message_index <= len(self.messages):
+                    target_message = self.messages[message_index - 1]
+                    target_message_id = target_message.get("id")
+                    
+                    # 确认操作
+                    messages_to_delete_count = len(self.messages) - message_index
+                    if messages_to_delete_count == 0:
+                        print("⚠️ 该消息已经是最后一条消息，无需回退")
+                        return
+                    
+                    print(f"\n⚠️ 确认回退操作：")
+                    print(f"   回退到消息: [{target_message.get('role', 'N/A')}] {target_message.get('title', 'N/A')}")
+                    print(f"   将删除 {messages_to_delete_count} 条后续消息")
+                    
+                    confirm = input("确认执行回退操作？(y/N): ").strip().lower()
+                    if confirm != 'y':
+                        print("❌ 取消回退操作")
+                        return
+                    
+                    # 调用后端API执行回退
+                    try:
+                        response = public_session.post(f"{base_url}/agents/messages/rollback-to/{target_message_id}")
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            print(f"✅ {result['message']}")
+                            print(f"📊 删除了 {result['deleted_count']} 条消息")
+                            if result.get('target_snapshot_id'):
+                                print(f"📸 快照已回退到: {result['target_snapshot_id']}")
+                            else:
+                                print("📸 未找到可回退的快照")
+                            
+                            # 重新同步数据
+                            print("🔄 正在同步最新数据...")
+                            await self.sync_project_data()
+                            print("✅ 数据同步完成")
+                            
+                        else:
+                            error_detail = response.json().get("detail", "未知错误") if response.headers.get("content-type", "").startswith("application/json") else response.text
+                            print(f"❌ 回退操作失败: {error_detail}")
+                            
+                    except Exception as e:
+                        print(f"❌ 回退操作出错: {e}")
+                    
+                    break
+                    
+                else:
+                    print(f"❌ 消息编号必须在 1 到 {len(self.messages)} 之间")
+                    continue
+                    
+            except ValueError:
+                print("❌ 请输入有效的数字，或输入 'q' 取消")
+                continue
+        
+        input("按回车键继续...")
+
     def get_snapshot_document(self, snapshot: Dict[str, Any]):
         """
         打印快照树状结构，仅显示标题与状态
@@ -1118,7 +1191,8 @@ async def main():
         print("4. 保存当前工程")
         print("5. 加载已有工程")
         print("6. 根据消息编号查看快照")
-        print("7. 退出")
+        print("7. 回退到指定消息")
+        print("8. 退出")
         print("="*80)
         
         operation_select = input("请选择操作: ")
@@ -1159,6 +1233,8 @@ async def main():
             
             input("按回车键继续...")
         elif operation_select == "7":
+            await sse_client.handle_rollback_to_message()
+        elif operation_select == "8":
             break
         else:
             print("❌ 无效的选择，请重新输入")

@@ -3,7 +3,7 @@
 负责一切与用户交互的接口，按需调用相应的智能体，统一消息操作接口
 """
 import asyncio
-from typing import Dict, List, Optional, AsyncGenerator, Callable
+from typing import Dict, List, Optional, AsyncGenerator, Callable, Any
 from uuid import uuid4
 import json
 from datetime import datetime
@@ -259,6 +259,81 @@ class MessageManager:
         self.log_message_history()
         # 返回剩余的最新消息ID
         return self.message_order[-1] if self.message_order else ""
+    
+    async def rollback_to_message(self, message_id: str) -> Dict[str, Any]:
+        """
+        用户前端回退功能：删除指定消息之后的所有消息，并回退快照
+        
+        Args:
+            message_id: 要回退到的消息ID（该消息会被保留，删除其后的消息）
+            
+        Returns:
+            回退结果字典
+        """
+        # 检查所有智能体是否都不在工作状态
+        for agent_name, agent in self._agents.items():
+            if agent.is_processing():
+                return {
+                    "success": False,
+                    "message": f"智能体 {agent_name} 正在工作中，无法执行回退操作"
+                }
+        
+        # 检查消息是否存在
+        if message_id not in self.messages:
+            return {
+                "success": False,
+                "message": f"消息不存在: {message_id}"
+            }
+        
+        # 找到消息在顺序中的位置
+        try:
+            rollback_index = self.message_order.index(message_id)
+        except ValueError:
+            return {
+                "success": False,
+                "message": f"消息在顺序列表中不存在: {message_id}"
+            }
+        
+        # 删除该消息之后的所有消息（不包括该消息本身）
+        messages_to_remove = self.message_order[rollback_index + 1:]
+        for msg_id in messages_to_remove:
+            if msg_id in self.messages:
+                del self.messages[msg_id]
+        
+        # 更新消息顺序
+        self.message_order = self.message_order[:rollback_index + 1]
+        
+        # 查找该消息及之前消息中最新的快照ID
+        target_snapshot_id = None
+        for i in range(rollback_index, -1, -1):
+            msg_id = self.message_order[i]
+            if msg_id in self.messages:
+                msg = self.messages[msg_id]
+                if msg.snapshot_id:
+                    target_snapshot_id = msg.snapshot_id
+                    break
+        
+        # 回退数据库快照
+        if target_snapshot_id:
+            # 检查快照是否存在
+            if target_snapshot_id in self.database_manager.snapshot_map:
+                self.database_manager.current_snapshot_id = target_snapshot_id
+                logger.info(f"数据库快照已回退到: {target_snapshot_id}")
+            else:
+                logger.warning(f"目标快照不存在: {target_snapshot_id}")
+                target_snapshot_id = None
+        
+        logger.info(f"用户回退操作完成: 删除了 {len(messages_to_remove)} 条消息")
+        self.log_message_history()
+        
+        return {
+            "success": True,
+            "message": f"成功回退到消息 {message_id}，删除了 {len(messages_to_remove)} 条消息",
+            "deleted_count": len(messages_to_remove),
+            "target_message_id": message_id,
+            "target_snapshot_id": target_snapshot_id,
+            "current_message_count": len(self.messages)
+        }
     
     async def _distribute_patch(self, patch: Patch) -> None:
         """

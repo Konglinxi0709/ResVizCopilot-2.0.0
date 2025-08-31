@@ -247,6 +247,32 @@ async def stop_generation():
         )
 
 
+@router.post("/messages/rollback-to/{message_id}")
+async def rollback_to_message(message_id: str):
+    """
+    用户前端回退功能：删除指定消息之后的所有消息，并回退快照
+    
+    Args:
+        message_id: 要回退到的消息ID（该消息会被保留，删除其后的消息）
+        
+    Returns:
+        回退操作结果
+    """
+    try:
+        result = await shared_message_manager.rollback_to_message(message_id)
+        
+        if result["success"]:
+            logger.info(f"用户回退操作成功: {result['message']}")
+            return result
+        else:
+            logger.warning(f"用户回退操作失败: {result['message']}")
+            raise HTTPException(status_code=400, detail=result["message"])
+            
+    except Exception as e:
+        logger.error(f"用户回退操作出错: {e}")
+        raise HTTPException(status_code=500, detail=f"回退操作失败: {str(e)}")
+
+
 @router.get("/status")
 async def get_agent_status():
     """
