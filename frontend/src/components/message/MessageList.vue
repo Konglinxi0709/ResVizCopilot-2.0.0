@@ -21,35 +21,14 @@
       
       <!-- 消息列表 -->
       <div v-else class="messages-wrapper">
-        <!-- 虚拟滚动优化 -->
-        <RecycleScroller
-          v-if="enableVirtualScroll && messages.length > virtualScrollThreshold"
-          class="virtual-scroller"
-          :items="messages"
-          :item-size="estimatedItemSize"
-          key-field="id"
-          v-slot="{ item }"
-        >
-          <MessageItem
-            :key="item.id"
-            :message="item"
-            @view-snapshot="handleViewSnapshot"
-            @rollback="handleRollback"
-            @stop-generation="handleStopGeneration"
-          />
-        </RecycleScroller>
-        
-        <!-- 常规渲染 -->
-        <template v-else>
-          <MessageItem
-            v-for="message in messages"
-            :key="message.id"
-            :message="message"
-            @view-snapshot="handleViewSnapshot"
-            @rollback="handleRollback"
-            @stop-generation="handleStopGeneration"
-          />
-        </template>
+        <MessageItem
+          v-for="message in messages"
+          :key="message.id"
+          :message="message"
+          @view-snapshot="handleViewSnapshot"
+          @rollback="handleRollback"
+          @stop-generation="handleStopGeneration"
+        />
       </div>
       
       <!-- 滚动到底部按钮 -->

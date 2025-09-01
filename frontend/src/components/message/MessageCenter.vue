@@ -1,66 +1,37 @@
 <template>
   <div class="message-center">
-    <!-- 消息中心头部 -->
-    <div class="message-header">
-      <div class="header-left">
-        <el-icon><ChatDotRound /></el-icon>
-        <span class="header-title">智能体对话</span>
-        <el-tag v-if="messageCount > 0" type="info" size="small">
-          {{ messageCount }} 条消息
-        </el-tag>
-      </div>
-      
-      <div class="header-right">
-        <!-- 连接状态指示 -->
-        <div class="connection-status" :class="connectionStatusClass">
-          <el-icon><component :is="connectionStatusIcon" /></el-icon>
-          <span class="status-text">{{ connectionStatusText }}</span>
-        </div>
-        
-        <!-- 操作按钮 -->
-        <el-dropdown @command="handleHeaderAction" trigger="click">
-          <el-button type="text" size="small">
-            <el-icon><More /></el-icon>
-          </el-button>
-          
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item 
-                command="sync-messages"
-                :icon="Refresh"
-                :disabled="isLoading"
-              >
-                同步消息
-              </el-dropdown-item>
-              <el-dropdown-item 
-                command="clear-messages"
-                :icon="Delete"
-                divided
-              >
-                清空消息
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-    </div>
     
     <!-- 智能体选择区域 -->
     <div class="agent-selection-area">
-      <AgentSelector
+      <el-select
         v-model="selectedAgent"
+        placeholder="选择智能体"
         :disabled="isGenerating"
-        :available-nodes="availableNodes"
-        @agent-changed="handleAgentChanged"
-      />
+        style="width: 100%; margin-bottom: 8px;"
+        @change="handleAgentChanged"
+      >
+        <el-option
+          v-for="agent in availableAgents"
+          :key="agent.value"
+          :label="agent.label"
+          :value="agent.value"
+        />
+      </el-select>
       
-      <NodeSelector
+      <el-select
         v-model="selectedNode"
-        :agent-type="selectedAgent"
-        :available-nodes="availableNodes"
-        :disabled="isGenerating"
-        @node-changed="handleNodeChanged"
-      />
+        placeholder="选择节点"
+        :disabled="isGenerating || !selectedAgent"
+        style="width: 100%;"
+        @change="handleNodeChanged"
+      >
+        <el-option
+          v-for="node in filteredNodes"
+          :key="node.id"
+          :label="node.title"
+          :value="node.id"
+        />
+      </el-select>
     </div>
     
     <!-- 消息列表区域 -->
@@ -101,16 +72,10 @@
 
 <script>
 import { defineComponent, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  ChatDotRound, More, Refresh, Delete, 
-  Connection, Loading, Check
-} from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useMessageStore } from '@/stores/messageStore'
 import { useTreeStore } from '@/stores/treeStore'
 import { useProjectStore } from '@/stores/projectStore'
-import AgentSelector from './AgentSelector.vue'
-import NodeSelector from './NodeSelector.vue'
 import MessageList from './MessageList.vue'
 import ChatInput from './ChatInput.vue'
 
@@ -118,12 +83,8 @@ export default defineComponent({
   name: 'MessageCenter',
   
   components: {
-    AgentSelector,
-    NodeSelector,
     MessageList,
-    ChatInput,
-    ChatDotRound, More, Refresh, Delete,
-    Connection, Loading, Check
+    ChatInput
   },
   
   props: {
@@ -156,6 +117,12 @@ export default defineComponent({
     const error = computed(() => messageStore.error)
     const currentSnapshot = computed(() => treeStore.currentSnapshot)
     
+    // 可用智能体列表
+    const availableAgents = computed(() => [
+      { value: 'auto_research_agent', label: '自动研究智能体' },
+      { value: 'user_chat_agent', label: '用户对话智能体' }
+    ])
+    
     // 可用节点列表
     const availableNodes = computed(() => {
       const snapshot = currentSnapshot.value
@@ -185,6 +152,25 @@ export default defineComponent({
       return collectNodes(snapshot.roots)
     })
     
+    // 根据智能体类型过滤节点
+    const filteredNodes = computed(() => {
+      if (!selectedAgent.value) return []
+      
+      const nodes = availableNodes.value
+      
+      if (selectedAgent.value === 'auto_research_agent') {
+        // 只显示实施问题节点
+        return nodes.filter(node => 
+          node.type === 'problem' && node.problem_type === 'implementation'
+        )
+      } else if (selectedAgent.value === 'user_chat_agent') {
+        // 只显示解决方案节点
+        return nodes.filter(node => node.type === 'solution')
+      }
+      
+      return []
+    })
+    
     // 是否可以发送消息
     const canSendMessage = computed(() => {
       return selectedAgent.value && 
@@ -193,52 +179,26 @@ export default defineComponent({
              inputContent.value.trim().length > 0
     })
     
-    // 连接状态
-    const connectionStatus = computed(() => {
-      if (isGenerating.value) {
-        return 'generating'
-      } else if (error.value) {
-        return 'error'
-      } else {
-        return 'connected'
-      }
-    })
+
     
-    const connectionStatusClass = computed(() => {
-      return `status-${connectionStatus.value}`
-    })
-    
-    const connectionStatusIcon = computed(() => {
-      switch (connectionStatus.value) {
-        case 'generating': return 'Loading'
-        case 'error': return 'Connection'
-        case 'connected': return 'Connection'
-        default: return 'Check'
-      }
-    })
-    
-    const connectionStatusText = computed(() => {
-      switch (connectionStatus.value) {
-        case 'generating': return '正在生成...'
-        case 'error': return '连接错误'
-        case 'connected': return '已连接'
-        default: return '就绪'
-      }
-    })
+
     
     // 方法
-    const handleAgentChanged = (agentInfo) => {
-      selectedAgentInfo.value = agentInfo
+    const handleAgentChanged = (agentValue) => {
+      selectedAgent.value = agentValue
       selectedNode.value = ''
       selectedNodeInfo.value = null
       
-      console.log('智能体已切换:', agentInfo)
+      console.log('智能体已切换:', agentValue)
     }
     
-    const handleNodeChanged = (nodeInfo) => {
-      selectedNodeInfo.value = nodeInfo
+    const handleNodeChanged = (nodeId) => {
+      selectedNode.value = nodeId
+      // 根据节点ID找到节点信息
+      const node = availableNodes.value.find(n => n.id === nodeId)
+      selectedNodeInfo.value = node || null
       
-      console.log('节点已切换:', nodeInfo)
+      console.log('节点已切换:', nodeId, node)
     }
     
     const handleSendMessage = async (messageData) => {
@@ -294,60 +254,9 @@ export default defineComponent({
       emit('view-snapshot', snapshotId)
     }
     
-    const handleHeaderAction = async (command) => {
-      try {
-        switch (command) {
-          case 'sync-messages':
-            await syncMessages()
-            break
-          case 'clear-messages':
-            await clearMessages()
-            break
-        }
-      } catch (error) {
-        console.error('操作失败:', error)
-        ElMessage.error('操作失败')
-      }
-    }
+
     
-    const syncMessages = async () => {
-      try {
-        const success = await messageStore.syncMessagesFromBackend()
-        if (success) {
-          ElMessage.success('消息同步成功')
-        } else {
-          ElMessage.error('消息同步失败')
-        }
-      } catch (error) {
-        console.error('同步消息失败:', error)
-        ElMessage.error('同步消息失败')
-      }
-    }
-    
-    const clearMessages = async () => {
-      try {
-        await ElMessageBox.confirm(
-          '确定要清空所有消息吗？此操作不可恢复。',
-          '确认清空',
-          {
-            confirmButtonText: '确定清空',
-            cancelButtonText: '取消',
-            type: 'warning',
-            confirmButtonClass: 'el-button--danger'
-          }
-        )
-        
-        messageStore.clearMessages()
-        ElMessage.success('消息已清空')
-        
-      } catch (error) {
-        // 用户取消操作
-        if (error === 'cancel') {
-          return
-        }
-        throw error
-      }
-    }
+
     
     const clearError = () => {
       messageStore.clearError()
@@ -397,16 +306,14 @@ export default defineComponent({
       isGenerating,
       error,
       availableNodes,
+      availableAgents,
+      filteredNodes,
       canSendMessage,
-      connectionStatusClass,
-      connectionStatusIcon,
-      connectionStatusText,
       handleAgentChanged,
       handleNodeChanged,
       handleSendMessage,
       handleTitleChange,
       handleViewSnapshot,
-      handleHeaderAction,
       clearError
     }
   }
@@ -423,77 +330,11 @@ export default defineComponent({
   overflow: hidden;
 }
 
-/* 消息头部 */
-.message-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  background: var(--bg-color-light, #f8f9fa);
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-color);
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-/* 连接状态 */
-.connection-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  transition: all 0.3s;
-}
-
-.status-connected {
-  color: var(--success-color);
-  background: var(--success-color-lighter, #f0f9ff);
-}
-
-.status-generating {
-  color: var(--warning-color);
-  background: var(--warning-color-lighter, #fdf6ec);
-}
-
-.status-generating .el-icon {
-  animation: spin 1s linear infinite;
-}
-
-.status-error {
-  color: var(--danger-color);
-  background: var(--danger-color-lighter, #fef0f0);
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.status-text {
-  font-weight: 500;
-}
 
 /* 智能体选择区域 */
 .agent-selection-area {
-  padding: 20px;
+  padding: 12px 16px;
   background: var(--bg-color);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
@@ -508,7 +349,7 @@ export default defineComponent({
 
 /* 输入区域 */
 .input-area {
-  padding: 20px;
+  padding: 12px 16px;
   background: var(--bg-color);
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;

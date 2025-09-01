@@ -64,15 +64,56 @@
         :class="{ 'collapsed': rightPanelCollapsed }"
       >
         <div class="panel-header">
-          <h3>{{ $t('message.title') }}</h3>
-          <el-button 
-            type="text" 
-            @click="toggleRightPanel"
-            class="collapse-btn"
-          >
-            <ArrowRight v-if="!rightPanelCollapsed" />
-            <ArrowLeft v-else />
-          </el-button>
+          <div class="panel-header-left">
+            <el-icon><ChatDotRound /></el-icon>
+            <h3>{{ $t('message.title') }}</h3>
+            <el-tag v-if="messageCount > 0" type="info" size="small">
+              {{ messageCount }} 条消息
+            </el-tag>
+          </div>
+          
+          <div class="panel-header-right">
+            <!-- 连接状态指示 -->
+            <div class="connection-status" :class="connectionStatusClass">
+              <el-icon><component :is="connectionStatusIcon" /></el-icon>
+              <span class="status-text">{{ connectionStatusText }}</span>
+            </div>
+            
+            <!-- 消息操作下拉菜单 -->
+            <el-dropdown @command="handleMessageAction" trigger="click">
+              <el-button type="text" size="small">
+                <el-icon><More /></el-icon>
+              </el-button>
+              
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item 
+                    command="sync-messages"
+                    :icon="Refresh"
+                    :disabled="isGenerating"
+                  >
+                    同步消息
+                  </el-dropdown-item>
+                  <el-dropdown-item 
+                    command="clear-messages"
+                    :icon="Delete"
+                    divided
+                  >
+                    清空消息
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            
+            <el-button 
+              type="text" 
+              @click="toggleRightPanel"
+              class="collapse-btn"
+            >
+              <ArrowRight v-if="!rightPanelCollapsed" />
+              <ArrowLeft v-else />
+            </el-button>
+          </div>
         </div>
         <MessageCenter 
           v-if="!rightPanelCollapsed"
@@ -85,24 +126,28 @@
     
     <!-- 全局加载指示器 -->
     <div v-if="isLoading" class="global-loading">
-      <el-loading 
-        :text="loadingText || $t('app.loading')"
-        background="rgba(0, 0, 0, 0.7)"
-      />
+      <div class="loading-overlay">
+        <el-icon class="loading-icon"><Loading /></el-icon>
+        <div class="loading-text">{{ loadingText || $t('app.loading') }}</div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 import { defineComponent } from 'vue'
-import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight, Camera } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { 
+  ArrowLeft, ArrowRight, Camera, ChatDotRound, More, Refresh, Delete,
+  Connection, Loading, Check
+} from '@element-plus/icons-vue'
 import AppHeader from './components/shared/AppHeader.vue'
 import ProjectManager from './components/project/ProjectManager.vue'
 import ResearchTree from './components/tree/ResearchTree.vue'
 import MessageCenter from './components/message/MessageCenter.vue'
 import { useProjectStore } from './stores/projectStore'
 import { useTreeStore } from './stores/treeStore'
+import { useMessageStore } from './stores/messageStore'
 import { useUIStore } from './stores/uiStore'
 
 export default defineComponent({
@@ -114,17 +159,26 @@ export default defineComponent({
     MessageCenter,
     ArrowLeft,
     ArrowRight,
-    Camera
+    Camera,
+    ChatDotRound,
+    More,
+    Refresh,
+    Delete,
+    Connection,
+    Loading,
+    Check
   },
   
   setup() {
     const projectStore = useProjectStore()
     const treeStore = useTreeStore()
+    const messageStore = useMessageStore()
     const uiStore = useUIStore()
     
     return {
       projectStore,
       treeStore,
+      messageStore,
       uiStore
     }
   },
@@ -164,6 +218,48 @@ export default defineComponent({
     
     agentOperatingNodeId() {
       return this.treeStore.agentOperatingNodeId
+    },
+    
+    // 消息相关计算属性
+    messageCount() {
+      return this.messageStore.messageCount
+    },
+    
+    isGenerating() {
+      return this.messageStore.isGenerating
+    },
+    
+    // 连接状态
+    connectionStatus() {
+      if (this.isGenerating) {
+        return 'generating'
+      } else if (this.messageStore.error) {
+        return 'error'
+      } else {
+        return 'connected'
+      }
+    },
+    
+    connectionStatusClass() {
+      return `status-${this.connectionStatus}`
+    },
+    
+    connectionStatusIcon() {
+      switch (this.connectionStatus) {
+        case 'generating': return 'Loading'
+        case 'error': return 'Connection'
+        case 'connected': return 'Connection'
+        default: return 'Check'
+      }
+    },
+    
+    connectionStatusText() {
+      switch (this.connectionStatus) {
+        case 'generating': return '正在生成...'
+        case 'error': return '连接错误'
+        case 'connected': return '已连接'
+        default: return '就绪'
+      }
     }
   },
   
@@ -264,6 +360,62 @@ export default defineComponent({
     
     exitSnapshotView() {
       this.treeStore.exitSnapshotView()
+    },
+    
+    // 消息操作方法
+    async handleMessageAction(command) {
+      try {
+        switch (command) {
+          case 'sync-messages':
+            await this.syncMessages()
+            break
+          case 'clear-messages':
+            await this.clearMessages()
+            break
+        }
+      } catch (error) {
+        console.error('消息操作失败:', error)
+        ElMessage.error('操作失败')
+      }
+    },
+    
+    async syncMessages() {
+      try {
+        const success = await this.messageStore.syncMessagesFromBackend()
+        if (success) {
+          ElMessage.success('消息同步成功')
+        } else {
+          ElMessage.error('消息同步失败')
+        }
+      } catch (error) {
+        console.error('同步消息失败:', error)
+        ElMessage.error('同步消息失败')
+      }
+    },
+    
+    async clearMessages() {
+      try {
+        await ElMessageBox.confirm(
+          '确定要清空所有消息吗？此操作不可恢复。',
+          '确认清空',
+          {
+            confirmButtonText: '确定清空',
+            cancelButtonText: '取消',
+            type: 'warning',
+            confirmButtonClass: 'el-button--danger'
+          }
+        )
+        
+        this.messageStore.clearMessages()
+        ElMessage.success('消息已清空')
+        
+      } catch (error) {
+        // 用户取消操作
+        if (error === 'cancel') {
+          return
+        }
+        throw error
+      }
     }
   }
 })
@@ -274,7 +426,7 @@ export default defineComponent({
 :root {
   --header-height: 60px;
   --panel-header-height: 60px; /* 增加到60px */
-  --sidebar-width: 300px;
+  --sidebar-width: 600px;
   --sidebar-collapsed-width: 50px;
   
   /* 亮色主题 */
@@ -360,6 +512,89 @@ body {
   justify-content: space-between;
   background-color: var(--bg-color);
   flex-shrink: 0; /* 防止被压缩 */
+}
+
+.panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 连接状态 */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.status-connected {
+  color: var(--success-color);
+  background: var(--success-color-lighter, #f0f9ff);
+}
+
+.status-generating {
+  color: var(--warning-color);
+  background: var(--warning-color-lighter, #fdf6ec);
+}
+
+.status-generating .el-icon {
+  animation: spin 1s linear infinite;
+}
+
+.status-error {
+  color: var(--danger-color);
+  background: var(--danger-color-lighter, #fef0f0);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+/* 全局加载指示器 */
+.global-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: white;
+}
+
+.loading-icon {
+  font-size: 32px;
+  animation: spin 1s linear infinite;
+}
+
+.loading-text {
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .panel-header h3 {

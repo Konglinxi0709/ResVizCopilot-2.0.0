@@ -149,20 +149,7 @@
         </div>
       </div>
       
-      <!-- 操作信息 -->
-      <div 
-        v-if="message.action_title && !titleCollapsed" 
-        class="message-action"
-      >
-        <div class="action-info">
-          <el-icon><Operation /></el-icon>
-          <span class="action-title">{{ message.action_title }}</span>
-        </div>
-        
-        <div v-if="message.action_params && Object.keys(message.action_params).length > 0" class="action-params">
-          <pre>{{ JSON.stringify(message.action_params, null, 2) }}</pre>
-        </div>
-      </div>
+
       
       <!-- 可见节点信息 -->
       <div 
@@ -184,7 +171,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   User, UserFilled, InfoFilled, More,
   ArrowDown, ArrowUp,
-  Operation, View
+  View
 } from '@element-plus/icons-vue'
 import { useTreeStore } from '@/stores/treeStore'
 import MarkdownRenderer from './MarkdownRenderer.vue'
@@ -197,7 +184,7 @@ export default defineComponent({
     MarkdownRenderer,
     User, UserFilled, InfoFilled, More,
     ArrowDown, ArrowUp,
-    Operation, View
+    View
   },
   
   props: {
@@ -617,40 +604,7 @@ export default defineComponent({
   opacity: 0.9;
 }
 
-/* 操作信息 */
-.message-action {
-  padding: 16px 20px;
-  background: var(--info-color-lighter, #f4f9ff);
-  border-bottom: 1px solid var(--border-color);
-}
 
-.action-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.action-title {
-  font-weight: 500;
-  color: var(--info-color);
-}
-
-.action-params {
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 12px;
-  margin-top: 8px;
-}
-
-.action-params pre {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-color);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
 
 /* 可见节点 */
 .visible-nodes {

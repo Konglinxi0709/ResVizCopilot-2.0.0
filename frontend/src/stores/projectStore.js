@@ -67,7 +67,7 @@ export const useProjectStore = defineStore('project', {
         
         const response = await apiService.get('/projects')
         
-        // 处理后端返回的数据结构（apiService已经返回了response.data）
+        // 处理后端返回的数据结构
         if (response.success && response.projects) {
           // 转换数据格式，将 project_name 转为 name，过滤掉无效数据
           this.projectList = response.projects
