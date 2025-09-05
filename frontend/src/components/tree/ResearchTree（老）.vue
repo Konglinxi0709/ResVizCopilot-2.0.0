@@ -17,7 +17,7 @@
         </template>
         <div class="debug-content">
           <div class="debug-item">
-            <el-tag v-if="hasData" type="success">有Mind-elixir数据</el-tag>
+            <el-tag v-if="currentMindElixirData" type="success">有Mind-elixir数据</el-tag>
             <el-tag v-else type="danger">无Mind-elixir数据</el-tag>
           </div>
           <div class="debug-item">
@@ -25,7 +25,7 @@
             <el-tag v-else type="info">正常模式</el-tag>
           </div>
           <div class="debug-item">
-            <el-tag v-if="actualAgentOperatingNodeId" type="info">智能体操作中: {{ actualAgentOperatingNodeId.slice(0,8) }}...</el-tag>
+            <el-tag v-if="agentOperatingNodeId" type="info">智能体操作中: {{ agentOperatingNodeId.slice(0,8) }}...</el-tag>
             <el-tag v-else type="success">智能体空闲</el-tag>
           </div>
           <div class="debug-item">
@@ -37,13 +37,14 @@
           <el-button 
             size="small" 
             type="primary"
-            @click="loadBackendData"
+            @click="loadCurrentSnapshotFromBackend"
             :loading="isLoadingData"
           >
             从后端加载数据
           </el-button>
           <el-button size="small" @click="loadTestData">加载测试数据</el-button>
-          <el-button size="small" @click="loadSnapshotData">快照测试</el-button>
+          <el-button size="small" @click="loadSnapshotTestData">快照测试</el-button>
+          <el-button size="small" @click="loadMockBackendData">模拟后端数据</el-button>
           <el-button size="small" @click="simulateAgentOperation">模拟智能体操作</el-button>
           <el-button size="small" @click="clearTestData">清除数据</el-button>
         </div>
@@ -55,7 +56,7 @@
       <el-button 
         circle 
         size="small" 
-        @click="toggleDebugInfo"
+        @click="showDebugInfo = !showDebugInfo"
         :type="showDebugInfo ? 'primary' : 'default'"
       >
         <el-icon><Setting /></el-icon>
@@ -77,16 +78,18 @@
 </template>
 
 <script>
+import { defineComponent } from 'vue'
 import { Close, Setting } from '@element-plus/icons-vue'
 import MindElixirWrapper from './MindElixirWrapper.vue'
 import { 
-  simpleTestData,
+  testMindElixirData,
+  testSnapshotMindElixirData,
   mockBackendSnapshotData
 } from '@/data/testMindElixirData'
 import { ResearchTreeTransformer } from '@/services/ResearchTreeTransformer'
 import { useTreeStore } from '@/stores/treeStore'
 
-export default {
+export default defineComponent({
   name: 'ResearchTree',
   
   components: {
@@ -118,9 +121,8 @@ export default {
   
   data() {
     return {
-      treeStore: null,
       // 调试面板控制
-      showDebugInfo: false, // 默认收起调试面板
+      showDebugInfo: true, // 初始显示调试面板，方便测试
       
       // 当前使用的Mind-elixir数据
       currentMindElixirData: null,
@@ -136,20 +138,9 @@ export default {
     }
   },
   
-  computed: {
-    // 实际使用的智能体操作节点ID
-    actualAgentOperatingNodeId() {
-      return this.agentOperatingNodeId || this.testAgentNodeId
-    },
-    
-    // 是否有数据
-    hasData() {
-      return !!this.currentMindElixirData
-    }
-  },
-  
   mounted() {
-    this.treeStore = useTreeStore()
+    // 自动加载测试数据
+    this.loadTestData()
   },
   
   methods: {
@@ -172,68 +163,99 @@ export default {
       this.loadTestData()
     },
     
-    // 加载测试数据（仅调试入口，默认不自动调用）
+    // 加载测试数据
     loadTestData() {
-      console.log('🎨 加载简化测试数据')
-      this.currentMindElixirData = simpleTestData
+      console.log('🎨 加载现代化Mind-elixir测试数据')
+      this.currentMindElixirData = testMindElixirData
+      this.testAgentNodeId = null
+      this.$message.success('现代化测试数据加载成功')
     },
     
-    // 切换调试面板显示
-    toggleDebugInfo() {
-      this.showDebugInfo = !this.showDebugInfo
+    // 加载快照测试数据
+    loadSnapshotTestData() {
+      console.log('📸 加载快照查看测试数据')
+      this.currentMindElixirData = testSnapshotMindElixirData
+      this.testAgentNodeId = null
+      this.$message.success('快照测试数据加载成功')
+    },
+    
+    // 从后端加载当前快照数据
+    async loadCurrentSnapshotFromBackend() {
+      console.log('🔄 开始从后端加载当前快照数据')
+      this.isLoadingData = true
+      
+      try {
+        // 使用treeStore获取当前快照数据
+        const treeStore = useTreeStore()
+        const snapshotResponse = await treeStore.getCurrentSnapshot()
+        
+        if (snapshotResponse && snapshotResponse.data) {
+          console.log('✅ 后端快照数据获取成功:', snapshotResponse.data)
+          
+          // 使用转换器转换数据
+          const context = {
+            selectedSolutionIds: this.transformer.extractSelectedSolutionIds(snapshotResponse.data)
+          }
+          
+          const mindElixirData = this.transformer.transformToMindElixir(snapshotResponse.data, context)
+          
+          console.log('🎨 数据转换完成:', mindElixirData)
+          
+          // 应用转换后的数据
+          this.currentMindElixirData = mindElixirData
+          this.testAgentNodeId = null
+          
+          this.$message.success('后端数据加载成功')
+        } else {
+          console.warn('⚠️ 当前工程没有快照数据')
+          this.currentMindElixirData = {
+            nodeData: {
+              id: 'empty-root',
+              topic: '当前工程暂无数据',
+              children: []
+            }
+          }
+          this.$message.warning('当前工程没有快照数据')
+        }
+        
+      } catch (error) {
+        console.error('❌ 从后端加载快照数据失败:', error)
+        this.$message.warning(`后端连接失败，使用模拟数据: ${error.message}`)
+        
+        // 连接失败时使用模拟数据
+        this.loadMockBackendData()
+      } finally {
+        this.isLoadingData = false
+      }
+    },
+    
+    // 加载模拟的后端数据
+    loadMockBackendData() {
+      console.log('🔄 加载模拟后端数据')
+      
+      const context = {
+        selectedSolutionIds: this.transformer.extractSelectedSolutionIds(mockBackendSnapshotData)
+      }
+      
+      const mindElixirData = this.transformer.transformToMindElixir(mockBackendSnapshotData, context)
+      
+      this.currentMindElixirData = mindElixirData
+      this.testAgentNodeId = null
+      
+      this.$message.info('已加载模拟后端数据（用于演示）')
     },
     
     // 模拟智能体操作
     simulateAgentOperation() {
-      // 随机选择一个节点作为智能体操作目标
-      const nodes = ['node-1', 'node-2', 'node-3', 'node-4']
-      this.testAgentNodeId = nodes[Math.floor(Math.random() * nodes.length)]
+      console.log('模拟智能体操作')
+      this.testAgentNodeId = 'sub-problem-2'
+      this.$message.info('智能体操作模拟已启动')
       
-      console.log('🤖 模拟智能体操作节点:', this.testAgentNodeId)
-      
-      // 3秒后清除操作状态
+      // 3秒后自动停止模拟
       setTimeout(() => {
         this.testAgentNodeId = null
-        console.log('🤖 智能体操作完成')
+        this.$message.success('智能体操作模拟已结束')
       }, 3000)
-    },
-    
-    // 加载快照数据
-    loadSnapshotData() {
-      console.log('📸 加载快照数据')
-      // 使用转换器动态生成快照数据
-      const context = {
-        isSnapshotView: true,
-        agentOperatingNodeId: this.actualAgentOperatingNodeId
-      }
-      this.currentMindElixirData = this.transformer.transformToMindElixir(
-        mockBackendSnapshotData,
-        context
-      )
-    },
-    
-    // 加载后端数据（根据传入的snapshotData转换渲染）
-    async loadBackendData() {
-      console.log('🔗 根据当前快照渲染研究树')
-      this.isLoadingData = true
-      try {
-        const snapshot = this.snapshotData
-        if (!snapshot) {
-          console.warn('⚠️ 无可用的snapshotData用于渲染')
-          this.currentMindElixirData = null
-          return
-        }
-        const context = {
-          isSnapshotView: this.isSnapshotView,
-          agentOperatingNodeId: this.actualAgentOperatingNodeId
-        }
-        this.currentMindElixirData = this.transformer.transformToMindElixir(snapshot, context)
-        console.log('✅ 研究树已根据真实快照渲染')
-      } catch (error) {
-        console.error('❌ 渲染研究树失败:', error)
-      } finally {
-        this.isLoadingData = false
-      }
     },
     
     // 清除测试数据
@@ -243,32 +265,15 @@ export default {
       this.testAgentNodeId = null
       this.$message.warning('测试数据已清除')
     }
-  }
-  ,
-  watch: {
-    // 监听来自父组件的真实快照数据变化，转换为Mind-elixir数据
-    snapshotData: {
-      handler(newVal) {
-        try {
-          if (!newVal) {
-            this.currentMindElixirData = null
-            return
-          }
-          const context = {
-            isSnapshotView: this.isSnapshotView,
-            agentOperatingNodeId: this.actualAgentOperatingNodeId
-          }
-          this.currentMindElixirData = this.transformer.transformToMindElixir(newVal, context)
-          console.log('🔄 已根据最新snapshotData更新研究树数据')
-        } catch (e) {
-          console.error('❌ 转换snapshotData失败:', e)
-        }
-      },
-      deep: true,
-      immediate: true
+  },
+  
+  // 计算属性，组合实际的智能体操作节点ID
+  computed: {
+    actualAgentOperatingNodeId() {
+      return this.agentOperatingNodeId || this.testAgentNodeId
     }
   }
-}
+})
 </script>
 
 <style scoped>

@@ -259,7 +259,6 @@ export class ResearchTreeTransformer {
       return null
     }
     
-    // 创建符合Mind-elixir要求的节点结构
     const mindElixirNode = {
       id: node.id,
       topic: node.title || '未命名节点',
@@ -269,22 +268,14 @@ export class ResearchTreeTransformer {
     // 应用节点样式
     this.applyNodeStyle(mindElixirNode, node, context, parentNode)
     
-    // 递归处理子节点 - 参考老版本的实现
+    // 递归处理子节点
     if (node.children && node.children.length > 0) {
-      const validChildren = []
       node.children.forEach(child => {
         const transformedChild = this.transformNode(child, context, node)
-        if (transformedChild && transformedChild.id && transformedChild.topic) {
-          validChildren.push(transformedChild)
+        if (transformedChild) {
+          mindElixirNode.children.push(transformedChild)
         }
       })
-      mindElixirNode.children = validChildren
-    }
-    
-    // 确保节点数据完整
-    if (!mindElixirNode.id || !mindElixirNode.topic) {
-      console.warn('⚠️ 转换后的节点数据不完整:', mindElixirNode)
-      return null
     }
     
     return mindElixirNode
@@ -340,11 +331,6 @@ export class ResearchTreeTransformer {
       baseStyle.borderColor = MODERN_COLORS.warning[500]
       baseStyle.borderWidth = '3px'
       baseStyle.boxShadow = `0 0 0 2px ${MODERN_COLORS.warning[500]}30`
-      // 添加特殊属性，用于 CSS 选择器
-      mindElixirNode.data = {
-        ...mindElixirNode.data,
-        'agent-operating': 'true'
-      }
     }
     
     // 应用快照查看状态

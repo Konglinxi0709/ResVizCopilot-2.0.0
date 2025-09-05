@@ -151,7 +151,7 @@ export const useMessageStore = defineStore('message', {
      */
     async handlePatch(patchData) {
       try {
-        console.log('📝 处理patch数据:', patchData)
+        
 
         // 更新快照数据
         if (patchData.snapshot && patchData.snapshot.data) {
@@ -206,7 +206,6 @@ export const useMessageStore = defineStore('message', {
       // 检查role属性
       const role = patchData.role
       if (!role) {
-        console.warn('⚠️ 创建新消息时必须指定role属性')
         return
       }
 
@@ -323,17 +322,12 @@ export const useMessageStore = defineStore('message', {
         // 重置目标消息状态
         const targetMessage = this.messages[rollbackIndex]
         if (targetMessage) {
-          targetMessage.status = 'generating'
           targetMessage.content = ''
           targetMessage.thinking = ''
           targetMessage.updated_at = new Date().toISOString()
         }
 
         console.log(`🔄 回溯消息: 删除了 ${messagesToRemove.length} 条消息`)
-
-        // 更新生成状态
-        this.isGenerating = true
-        this.currentGeneratingMessageId = targetMessage?.id || null
 
       } catch (error) {
         console.error('❌ 处理回溯时出错:', error)
@@ -473,9 +467,12 @@ export const useMessageStore = defineStore('message', {
                   }
                 } else if (eventData.event === 'finished') {
                   console.log('✅ 收到完成事件:', eventData.data)
-                  this.isGenerating = false
-                  this.currentAgentName = null
-                  this.currentGeneratingMessageId = null
+                  // 不再自动断开连接，等待明确的断开指令
+                  // 仅更新最后一个消息的状态
+                  const lastMessage = this.messages[this.messages.length - 1]
+                  if (lastMessage) {
+                    lastMessage.status = 'completed'
+                  }
                 } else {
                   // 直接作为patch数据处理
                   await this.handlePatch(eventData)
@@ -638,6 +635,33 @@ export const useMessageStore = defineStore('message', {
       }
     },
 
+    /**
+     * 加载消息列表（初始化时调用）
+     */
+    async loadMessages() {
+      try {
+        this.setLoading(true)
+        this.clearError()
+        
+        console.log('🔄 正在加载消息列表...')
+        
+        // 如果有当前工程，同步消息历史
+        if (this.messages.length === 0) {
+          await this.syncMessagesFromBackend()
+        }
+        
+        console.log('✅ 消息列表加载完成')
+        return true
+        
+      } catch (error) {
+        console.error('❌ 加载消息列表失败:', error)
+        this.setError('加载消息失败')
+        return false
+      } finally {
+        this.setLoading(false)
+      }
+    },
+    
     /**
      * 从后端同步消息历史
      * 参考CLI前端的sync_project_data逻辑

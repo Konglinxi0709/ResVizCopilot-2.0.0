@@ -3,23 +3,10 @@
     <!-- 消息头部 -->
     <div class="message-header">
       <div class="message-sender">
-        <!-- 发送者头像 -->
-        <div class="sender-avatar" :class="`avatar-${message.role}`">
-          <el-icon v-if="message.role === 'user'">
-            <User />
-          </el-icon>
-          <el-icon v-else-if="message.role === 'assistant'">
-            <UserFilled />
-          </el-icon>
-          <el-icon v-else>
-            <InfoFilled />
-          </el-icon>
-        </div>
-        
-        <!-- 发送者信息 -->
+        <!-- 发送者信息（移除头像） -->
         <div class="sender-info">
           <div class="sender-name">{{ senderName }}</div>
-          <div class="message-time">{{ formatTime(message.created_at) }}</div>
+          <div class="message-time">{{ formattedTime }}</div>
         </div>
       </div>
       
@@ -63,7 +50,7 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item 
-                v-if="message.snapshot_id" 
+                v-if="hasSnapshot" 
                 command="view-snapshot"
                 :icon="Camera"
               >
@@ -99,44 +86,27 @@
     <div class="message-content">
       <!-- 消息标题 -->
       <div 
-        v-if="message.title" 
+        v-if="message.title || isGenerating" 
         class="message-title" 
         :class="{ 'collapsed': titleCollapsed }"
-        @click="titleCollapsed = !titleCollapsed"
+        @click="toggleTitleCollapse"
       >
         <el-icon class="collapse-icon">
           <ArrowDown v-if="titleCollapsed" />
           <ArrowUp v-else />
         </el-icon>
-        <span class="title-text">{{ message.title }}</span>
-      </div>
-      
-      <!-- 消息主体内容 -->
-      <div 
-        v-if="message.content && !titleCollapsed" 
-        class="message-body"
-        :class="{ 'collapsed': contentCollapsed }"
-      >
-        <div class="content-header" @click="contentCollapsed = !contentCollapsed">
-          <el-icon class="collapse-icon">
-            <ArrowDown v-if="contentCollapsed" />
-            <ArrowUp v-else />
-          </el-icon>
-          <span class="section-title">内容</span>
-        </div>
-        
-        <div v-if="!contentCollapsed" class="content-body">
-          <MarkdownRenderer :content="message.content" />
-        </div>
+        <span class="title-text">
+          {{ message.title || (isGenerating ? '正在生成标题...' : '') }}
+        </span>
       </div>
       
       <!-- 思考过程 -->
       <div 
-        v-if="message.thinking && !titleCollapsed" 
+        v-if="(message.thinking || isGenerating) && !titleCollapsed" 
         class="message-thinking"
         :class="{ 'collapsed': thinkingCollapsed }"
       >
-        <div class="thinking-header" @click="thinkingCollapsed = !thinkingCollapsed">
+        <div class="thinking-header" @click="toggleThinkingCollapse">
           <el-icon class="collapse-icon">
             <ArrowDown v-if="thinkingCollapsed" />
             <ArrowUp v-else />
@@ -145,15 +115,29 @@
         </div>
         
         <div v-if="!thinkingCollapsed" class="thinking-body">
-          <MarkdownRenderer :content="message.thinking" />
+          <MarkdownRenderer 
+            :content="message.thinking || (isGenerating ? '正在生成思考过程...' : '')" 
+          />
         </div>
       </div>
+      
+      <!-- 消息主体内容 -->
+      <div 
+        v-if="(message.content || isGenerating) && !titleCollapsed" 
+        class="content-body"
+      >
+        <MarkdownRenderer 
+          :content="message.content || (isGenerating ? '正在生成内容...' : '')" 
+        />
+      </div>
+      
+      
       
 
       
       <!-- 可见节点信息 -->
       <div 
-        v-if="message.visible_node_ids && message.visible_node_ids.length > 0 && !titleCollapsed" 
+        v-if="hasVisibleNodes && !titleCollapsed" 
         class="visible-nodes"
       >
         <div class="nodes-info">
@@ -166,10 +150,9 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  User, UserFilled, InfoFilled, More,
+  More,
   ArrowDown, ArrowUp,
   View
 } from '@element-plus/icons-vue'
@@ -177,12 +160,12 @@ import { useTreeStore } from '@/stores/treeStore'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 import dayjs from 'dayjs'
 
-export default defineComponent({
+export default {
   name: 'MessageItem',
   
   components: {
     MarkdownRenderer,
-    User, UserFilled, InfoFilled, More,
+    More,
     ArrowDown, ArrowUp,
     View
   },
@@ -196,21 +179,22 @@ export default defineComponent({
   
   emits: ['view-snapshot', 'rollback', 'stop-generation'],
   
-  setup(props, { emit }) {
-    const treeStore = useTreeStore()
+  data() {
+    return {
+      treeStore: null,
+      titleCollapsed: true, // 标题默认折叠（整体关闭）
+      contentCollapsed: false,
+      thinkingCollapsed: true // 思考过程默认折叠
+    }
+  },
+  
+  computed: {
+    isGenerating() {
+      return this.message.status === 'generating'
+    },
     
-    // 展开/折叠状态
-    const titleCollapsed = ref(false)
-    const contentCollapsed = ref(false)
-    const thinkingCollapsed = ref(true) // 思考过程默认折叠
-    
-    // 计算属性
-    const isGenerating = computed(() => {
-      return props.message.status === 'generating'
-    })
-    
-    const senderName = computed(() => {
-      const message = props.message
+    senderName() {
+      const message = this.message
       
       if (message.role === 'user') {
         return '用户'
@@ -224,19 +208,19 @@ export default defineComponent({
         }
         
         // 从研究树获取节点信息
-        const currentSnapshot = treeStore.currentSnapshot
+        const currentSnapshot = this.treeStore?.currentSnapshot
         if (!currentSnapshot) {
           return '智能体'
         }
         
-        const publisherNode = findNodeById(currentSnapshot.roots || [], publisherId)
+        const publisherNode = this.findNodeById(currentSnapshot.roots || [], publisherId)
         if (!publisherNode) {
           return '智能体'
         }
         
         if (publisherNode.type === 'solution') {
           // 获取父问题节点
-          const parentProblem = findParentNode(currentSnapshot.roots || [], publisherId)
+          const parentProblem = this.findParentNode(currentSnapshot.roots || [], publisherId)
           if (parentProblem) {
             return `「${parentProblem.title}」问题的负责专家`
           }
@@ -248,134 +232,169 @@ export default defineComponent({
       }
       
       return '未知'
-    })
+    },
     
+    // 消息类型样式
+    messageTypeClass() {
+      switch (this.message.role) {
+        case 'user': return 'message-user'
+        case 'assistant': return 'message-assistant'
+        case 'system': return 'message-system'
+        default: return 'message-default'
+      }
+    },
+    
+    // 发送者头像
+    senderAvatar() {
+      switch (this.message.role) {
+        case 'user': return 'UserFilled'
+        case 'assistant': return 'InfoFilled'
+        case 'system': return 'InfoFilled'
+        default: return 'User'
+      }
+    },
+    
+    // 格式化时间
+    formattedTime() {
+      if (!this.message.created_at) return ''
+      return dayjs(this.message.created_at).format('MM-DD HH:mm:ss')
+    },
+    
+    // 是否有快照
+    hasSnapshot() {
+      return !!this.message.snapshot_id
+    },
+    
+    // 是否有可见节点
+    hasVisibleNodes() {
+      return this.message.visible_node_ids && this.message.visible_node_ids.length > 0
+    }
+  },
+  
+  mounted() {
+    this.treeStore = useTreeStore()
+  },
+  
+  methods: {
     // 辅助函数：根据ID查找节点
-    const findNodeById = (nodes, nodeId) => {
+    findNodeById(nodes, nodeId) {
       for (const node of nodes) {
         if (node.id === nodeId) {
           return node
         }
         if (node.children) {
-          const found = findNodeById(node.children, nodeId)
+          const found = this.findNodeById(node.children, nodeId)
           if (found) return found
         }
       }
       return null
-    }
+    },
     
     // 辅助函数：查找父节点
-    const findParentNode = (nodes, targetId, parent = null) => {
+    findParentNode(nodes, nodeId, parent = null) {
       for (const node of nodes) {
-        if (node.id === targetId) {
-          return parent
-        }
         if (node.children) {
-          const found = findParentNode(node.children, targetId, node)
+          for (const child of node.children) {
+            if (child.id === nodeId) {
+              return parent || node
+            }
+          }
+          const found = this.findParentNode(node.children, nodeId, node)
           if (found) return found
         }
       }
       return null
-    }
+    },
     
-    // 格式化时间
-    const formatTime = (time) => {
-      if (!time) return ''
-      return dayjs(time).format('MM-DD HH:mm:ss')
-    }
+    // 切换标题折叠状态
+    toggleTitleCollapse() {
+      this.titleCollapsed = !this.titleCollapsed
+    },
+    
+    // 切换内容折叠状态
+    toggleContentCollapse() {
+      this.contentCollapsed = !this.contentCollapsed
+    },
+    
+    // 切换思考过程折叠状态
+    toggleThinkingCollapse() {
+      this.thinkingCollapsed = !this.thinkingCollapsed
+    },
     
     // 处理操作
-    const handleAction = async (command) => {
+    async handleAction(command) {
       try {
         switch (command) {
           case 'view-snapshot':
-            await handleViewSnapshot()
+            await this.handleViewSnapshot()
             break
           case 'copy-content':
-            await handleCopyContent()
+            await this.handleCopyContent()
             break
           case 'rollback':
-            await handleRollback()
+            await this.handleRollback()
             break
           case 'stop':
-            await handleStopGeneration()
+            this.handleStopGeneration()
             break
         }
       } catch (error) {
         console.error('处理操作失败:', error)
         ElMessage.error('操作失败')
       }
-    }
+    },
     
     // 查看快照
-    const handleViewSnapshot = async () => {
-      if (!props.message.snapshot_id) {
+    async handleViewSnapshot() {
+      if (!this.hasSnapshot) {
         ElMessage.warning('该消息没有关联的快照')
         return
       }
       
-      emit('view-snapshot', props.message.snapshot_id)
+      this.$emit('view-snapshot', this.message.snapshot_id)
       ElMessage.success('正在加载快照...')
-    }
+    },
     
     // 复制内容
-    const handleCopyContent = async () => {
+    async handleCopyContent() {
       try {
-        const content = [
-          props.message.title && `标题: ${props.message.title}`,
-          props.message.content && `内容:\n${props.message.content}`,
-          props.message.thinking && `思考:\n${props.message.thinking}`
-        ].filter(Boolean).join('\n\n')
-        
+        const content = this.message.content || ''
         await navigator.clipboard.writeText(content)
         ElMessage.success('内容已复制到剪贴板')
       } catch (error) {
         console.error('复制失败:', error)
         ElMessage.error('复制失败')
       }
-    }
+    },
     
-    // 回溯消息
-    const handleRollback = async () => {
+    // 回退到此消息
+    async handleRollback() {
       try {
         await ElMessageBox.confirm(
-          `确定要回溯到此消息吗？此操作将删除该消息之后的所有消息，且不可恢复。`,
-          '确认回溯',
+          '确定要回退到此消息吗？此操作将删除该消息之后的所有消息。',
+          '确认回退',
           {
-            confirmButtonText: '确定回溯',
+            confirmButtonText: '确定',
             cancelButtonText: '取消',
-            type: 'warning',
-            confirmButtonClass: 'el-button--danger'
+            type: 'warning'
           }
         )
         
-        emit('rollback', props.message.id)
-        
+        this.$emit('rollback', this.message.id)
       } catch (error) {
-        // 用户取消操作
-        if (error === 'cancel') {
-          return
+        if (error !== 'cancel') {
+          console.error('回退操作失败:', error)
+          ElMessage.error('回退操作失败')
         }
-        throw error
       }
-    }
+    },
     
     // 停止生成
-    const handleStopGeneration = async () => {
-      emit('stop-generation')
-    }
-    
-    return {
-      titleCollapsed,
-      contentCollapsed,
-      thinkingCollapsed,
-      isGenerating,
-      senderName,
-      formatTime,
-      handleAction
+    handleStopGeneration() {
+      this.$emit('stop-generation')
     }
   }
-})
+}
 </script>
 
 <style scoped>

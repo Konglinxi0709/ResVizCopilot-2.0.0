@@ -8,7 +8,7 @@
         placeholder="选择智能体"
         :disabled="isGenerating"
         style="width: 100%; margin-bottom: 8px;"
-        @change="handleAgentChanged"
+        @change="handleAgentChange"
       >
         <el-option
           v-for="agent in availableAgents"
@@ -23,7 +23,7 @@
         placeholder="选择节点"
         :disabled="isGenerating || !selectedAgent"
         style="width: 100%;"
-        @change="handleNodeChanged"
+        @change="handleNodeChange"
       >
         <el-option
           v-for="node in filteredNodes"
@@ -49,7 +49,7 @@
         :title="inputTitle"
         :agent-type="selectedAgent"
         :selected-node="selectedNodeInfo"
-        :disabled="!canSendMessage"
+        :disabled="isGenerating"
         :is-loading="isGenerating"
         @send="handleSendMessage"
         @title-change="handleTitleChange"
@@ -71,7 +71,6 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useMessageStore } from '@/stores/messageStore'
 import { useTreeStore } from '@/stores/treeStore'
@@ -79,7 +78,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import MessageList from './MessageList.vue'
 import ChatInput from './ChatInput.vue'
 
-export default defineComponent({
+export default {
   name: 'MessageCenter',
   
   components: {
@@ -97,35 +96,52 @@ export default defineComponent({
   
   emits: ['view-snapshot'],
   
-  setup(props, { emit }) {
-    const messageStore = useMessageStore()
-    const treeStore = useTreeStore()
-    const projectStore = useProjectStore()
+  data() {
+    return {
+      messageStore: null,
+      treeStore: null,
+      projectStore: null,
+      selectedAgent: '',
+      selectedNode: '',
+      selectedNodeInfo: null,
+      selectedAgentInfo: null,
+      inputContent: '',
+      inputTitle: ''
+    }
+  },
+  
+  computed: {
+    messageCount() {
+      return this.messageStore?.messageCount || 0
+    },
     
-    // 响应式数据
-    const selectedAgent = ref('')
-    const selectedNode = ref('')
-    const selectedNodeInfo = ref(null)
-    const selectedAgentInfo = ref(null)
-    const inputContent = ref('')
-    const inputTitle = ref('')
+    isLoading() {
+      return this.messageStore?.isLoading || false
+    },
     
-    // 计算属性
-    const messageCount = computed(() => messageStore.messageCount)
-    const isLoading = computed(() => messageStore.isLoading)
-    const isGenerating = computed(() => messageStore.isGenerating)
-    const error = computed(() => messageStore.error)
-    const currentSnapshot = computed(() => treeStore.currentSnapshot)
+    isGenerating() {
+      return this.messageStore?.isGenerating || false
+    },
+    
+    error() {
+      return this.messageStore?.error
+    },
+    
+    currentSnapshot() {
+      return this.treeStore?.currentSnapshot
+    },
     
     // 可用智能体列表
-    const availableAgents = computed(() => [
-      { value: 'auto_research_agent', label: '自动研究智能体' },
-      { value: 'user_chat_agent', label: '用户对话智能体' }
-    ])
+    availableAgents() {
+      return [
+        { value: 'auto_research_agent', label: '自动研究智能体' },
+        { value: 'user_chat_agent', label: '用户对话智能体' }
+      ]
+    },
     
     // 可用节点列表
-    const availableNodes = computed(() => {
-      const snapshot = currentSnapshot.value
+    availableNodes() {
+      const snapshot = this.currentSnapshot
       if (!snapshot || !snapshot.roots) {
         return []
       }
@@ -150,174 +166,159 @@ export default defineComponent({
       }
       
       return collectNodes(snapshot.roots)
-    })
+    },
     
     // 根据智能体类型过滤节点
-    const filteredNodes = computed(() => {
-      if (!selectedAgent.value) return []
+    filteredNodes() {
+      if (!this.selectedAgent) return []
       
-      const nodes = availableNodes.value
+      const nodes = this.availableNodes
       
-      if (selectedAgent.value === 'auto_research_agent') {
+      if (this.selectedAgent === 'auto_research_agent') {
         // 只显示实施问题节点
         return nodes.filter(node => 
           node.type === 'problem' && node.problem_type === 'implementation'
         )
-      } else if (selectedAgent.value === 'user_chat_agent') {
+      } else if (this.selectedAgent === 'user_chat_agent') {
         // 只显示解决方案节点
         return nodes.filter(node => node.type === 'solution')
       }
       
       return []
-    })
+    },
     
-    // 是否可以发送消息
-    const canSendMessage = computed(() => {
-      return selectedAgent.value && 
-             selectedNode.value && 
-             !isGenerating.value && 
-             inputContent.value.trim().length > 0
-    })
-    
-
-    
-
-    
-    // 方法
-    const handleAgentChanged = (agentValue) => {
-      selectedAgent.value = agentValue
-      selectedNode.value = ''
-      selectedNodeInfo.value = null
-      
-      console.log('智能体已切换:', agentValue)
+    // 检查是否可以发送消息
+    canSendMessage() {
+      return this.selectedAgent && 
+             this.selectedNode && 
+             this.inputContent.trim() && 
+             !this.isGenerating
     }
-    
-    const handleNodeChanged = (nodeId) => {
-      selectedNode.value = nodeId
-      // 根据节点ID找到节点信息
-      const node = availableNodes.value.find(n => n.id === nodeId)
-      selectedNodeInfo.value = node || null
-      
-      console.log('节点已切换:', nodeId, node)
+  },
+  
+  watch: {
+    // 监听项目变更
+    'projectStore.currentProject': {
+      async handler(newProject) {
+        if (newProject) {
+          // 清空消息列表
+          this.messageStore.clearMessages()
+          // 重置选择
+          this.selectedAgent = ''
+          this.selectedNode = ''
+          this.selectedNodeInfo = null
+          this.selectedAgentInfo = null
+          this.inputContent = ''
+          this.inputTitle = ''
+        }
+      },
+      immediate: false
     }
+  },
+  
+  async mounted() {
+    this.messageStore = useMessageStore()
+    this.treeStore = useTreeStore()
+    this.projectStore = useProjectStore()
     
-    const handleSendMessage = async (messageData) => {
+    // 初始化消息列表：每次挂载（v-if展开）都强制从后端同步
+    await this.messageStore.syncMessagesFromBackend()
+  },
+  
+  methods: {
+    // 处理智能体选择
+    handleAgentChange(agentName) {
+      this.selectedAgent = agentName
+      this.selectedNode = ''
+      this.selectedNodeInfo = null
+      this.selectedAgentInfo = null
+      
+      // 更新智能体信息
+      this.selectedAgentInfo = this.availableAgents.find(
+        agent => agent.value === agentName
+      )
+    },
+    
+    // 处理节点选择
+    handleNodeChange(nodeId) {
+      this.selectedNode = nodeId
+      
+      // 更新节点信息
+      this.selectedNodeInfo = this.filteredNodes.find(
+        node => node.id === nodeId
+      )
+    },
+    
+    // 处理输入内容变更
+    handleContentChange(content) {
+      this.inputContent = content
+    },
+    
+    // 处理标题变更
+    handleTitleChange(title) {
+      this.inputTitle = title
+    },
+    
+    // 发送消息
+    async handleSendMessage() {
+      if (!this.canSendMessage) {
+        ElMessage.warning('请完善消息内容')
+        return
+      }
+      
       try {
-        if (!selectedAgent.value) {
-          ElMessage.warning('请先选择智能体')
-          return
-        }
-        
-        if (!selectedNode.value) {
-          ElMessage.warning('请先选择节点')
-          return
-        }
-        
-        console.log('发送消息:', messageData)
-        
-        // 准备智能体参数
-        const otherParams = {}
-        
-        if (selectedAgent.value === 'auto_research_agent') {
-          otherParams.problem_id = selectedNode.value
-        } else if (selectedAgent.value === 'user_chat_agent') {
-          otherParams.solution_id = selectedNode.value
-        }
-        
-        // 发送消息
-        const success = await messageStore.sendAgentMessage(
-          selectedAgent.value,
-          messageData.content,
-          messageData.title,
+        // 直接调用基于CLI语义的sendAgentMessage
+        const otherParams = this.selectedAgent === 'auto_research_agent'
+          ? { problem_id: this.selectedNode }
+          : this.selectedAgent === 'user_chat_agent'
+            ? { solution_id: this.selectedNode }
+            : {}
+        await this.messageStore.sendAgentMessage(
+          this.selectedAgent,
+          this.inputContent.trim(),
+          this.inputTitle.trim() || '用户消息',
           otherParams
         )
         
-        if (success) {
-          console.log('消息发送成功')
-          // 清空输入内容在ChatInput组件中处理
-        } else {
-          ElMessage.error('消息发送失败')
-        }
+        // 清空输入
+        this.inputContent = ''
+        this.inputTitle = ''
         
+        ElMessage.success('消息发送成功')
       } catch (error) {
         console.error('发送消息失败:', error)
         ElMessage.error('发送消息失败')
       }
-    }
+    },
     
-    const handleTitleChange = (title) => {
-      inputTitle.value = title
-    }
+    // 查看快照
+    handleViewSnapshot(snapshotId) {
+      this.$emit('view-snapshot', snapshotId)
+    },
     
-    const handleViewSnapshot = (snapshotId) => {
-      console.log('查看快照:', snapshotId)
-      emit('view-snapshot', snapshotId)
-    }
-    
-
-    
-
-    
-    const clearError = () => {
-      messageStore.clearError()
-    }
-    
-    // 初始化
-    const initialize = async () => {
+    // 停止生成
+    async handleStopGeneration() {
       try {
-        console.log('初始化消息中心...')
-        
-        // 同步消息历史
-        await messageStore.syncMessagesFromBackend()
-        
-        console.log('消息中心初始化完成')
+        await this.messageStore.stopGeneration()
+        ElMessage.success('已停止生成')
       } catch (error) {
-        console.error('初始化消息中心失败:', error)
-        ElMessage.error('初始化失败')
+        console.error('停止生成失败:', error)
+        ElMessage.error('停止生成失败')
       }
-    }
+    },
     
-    // 监听工程变化，重新初始化
-    watch(() => projectStore.currentProject, async (newProject) => {
-      if (newProject) {
-        await initialize()
+    // 清空消息
+    async handleClearMessages() {
+      try {
+        await this.messageStore.clearMessages()
+        ElMessage.success('消息已清空')
+      } catch (error) {
+        console.error('清空消息失败:', error)
+        ElMessage.error('清空消息失败')
       }
-    })
-    
-    // 生命周期
-    onMounted(async () => {
-      await initialize()
-    })
-    
-    onBeforeUnmount(() => {
-      // 断开SSE连接
-      messageStore.disconnectSSE()
-    })
-    
-    return {
-      selectedAgent,
-      selectedNode,
-      selectedNodeInfo,
-      selectedAgentInfo,
-      inputContent,
-      inputTitle,
-      messageCount,
-      isLoading,
-      isGenerating,
-      error,
-      availableNodes,
-      availableAgents,
-      filteredNodes,
-      canSendMessage,
-      handleAgentChanged,
-      handleNodeChanged,
-      handleSendMessage,
-      handleTitleChange,
-      handleViewSnapshot,
-      clearError
     }
   }
-})
+}
 </script>
 
 <style scoped>

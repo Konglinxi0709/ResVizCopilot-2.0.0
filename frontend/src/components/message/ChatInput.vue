@@ -35,11 +35,10 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, nextTick, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Promotion } from '@element-plus/icons-vue'
 
-export default defineComponent({
+export default {
   name: 'ChatInput',
   
   components: {
@@ -110,100 +109,124 @@ export default defineComponent({
   
   emits: ['update:modelValue', 'send', 'title-change'],
   
-  setup(props, { emit }) {
-    const textareaRef = ref(null)
-    const content = ref(props.modelValue)
-    const localTitle = ref(props.title)
+  data() {
+    return {
+      textareaRef: null,
+      content: this.modelValue,
+      localTitle: this.title
+    }
+  },
+  
+  computed: {
+    wordCount() {
+      return this.content.length
+    },
     
-    // 计算属性
-    const wordCount = computed(() => content.value.length)
+    canSend() {
+      return this.content.trim().length > 0 && 
+             this.wordCount <= this.maxLength && 
+             !this.disabled && 
+             !this.isLoading
+    },
     
-    const canSend = computed(() => {
-      return content.value.trim().length > 0 && 
-             wordCount.value <= props.maxLength && 
-             !props.disabled && 
-             !props.isLoading
-    })
-    
-    const sendButtonText = computed(() => {
-      if (props.isLoading) {
+    sendButtonText() {
+      if (this.isLoading) {
         return '发送中...'
       }
       return '发送'
-    })
-    
-    // 方法
-    const handleInput = (value) => {
-      content.value = value
-      emit('update:modelValue', value)
     }
+  },
+  
+  watch: {
+    modelValue(newValue) {
+      this.content = newValue
+    },
     
-    const handleKeydown = (event) => {
+    title(newValue) {
+      this.localTitle = newValue
+    }
+  },
+  
+  mounted() {
+    // 自动聚焦输入框
+    this.$nextTick(() => {
+      if (this.textareaRef) {
+        this.textareaRef.focus()
+      }
+    })
+  },
+  
+  methods: {
+    handleInput(value) {
+      this.content = value
+      this.$emit('update:modelValue', value)
+    },
+    
+    handleKeydown(event) {
       // Ctrl+Enter 或 Cmd+Enter 发送
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault()
-        if (canSend.value) {
-          handleSend()
+        if (this.canSend) {
+          this.handleSend()
         }
       }
-    }
+    },
     
-    const handleSend = () => {
-      if (!canSend.value) return
-      
-      const trimmedContent = content.value.trim()
-      if (!trimmedContent) {
-        ElMessage.warning('请输入内容')
+    handleSend() {
+      if (!this.canSend) {
+        ElMessage.warning('请输入有效内容')
         return
       }
       
-      // 生成标题（如果没有设置）
-      let messageTitle = localTitle.value.trim()
-      if (!messageTitle) {
-        if (props.agentType === 'auto_research_agent') {
-          messageTitle = '自动生成解决方案'
-        } else if (props.agentType === 'user_chat_agent') {
-          messageTitle = '对话交流'
-        } else {
-          messageTitle = '用户消息'
-        }
+      // 发送消息
+      this.$emit('send', {
+        content: this.content.trim(),
+        title: this.localTitle.trim() || '用户消息'
+      })
+      
+      // 清空输入
+      this.content = ''
+      this.localTitle = ''
+      this.$emit('update:modelValue', '')
+      this.$emit('title-change', '')
+    },
+    
+    handleTitleChange(value) {
+      this.localTitle = value
+      this.$emit('title-change', value)
+    },
+    
+    // 自动调整文本框高度
+    adjustTextareaHeight() {
+      if (!this.textareaRef) return
+      
+      this.$nextTick(() => {
+        const textarea = this.textareaRef
+        textarea.style.height = 'auto'
+        
+        const lineHeight = parseInt(getComputedStyle(textarea).lineHeight)
+        const minHeight = lineHeight * this.minRows
+        const maxHeight = lineHeight * this.maxRows
+        
+        const scrollHeight = textarea.scrollHeight
+        const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight))
+        
+        textarea.style.height = `${newHeight}px`
+      })
+    },
+    
+    // 获取节点显示信息
+    getNodeDisplayInfo() {
+      if (!this.selectedNode) return ''
+      
+      const { title, path } = this.selectedNode
+      if (path && path.length > 0) {
+        return `${path.join(' > ')} > ${title}`
       }
-      
-      emit('send', {
-        content: trimmedContent,
-        title: messageTitle,
-        agentType: props.agentType,
-        selectedNode: props.selectedNode
-      })
-      
-      // 清空内容
-      content.value = ''
-      emit('update:modelValue', '')
-    }
-    
-
-    
-    onMounted(() => {
-      // 组件挂载后聚焦
-      nextTick(() => {
-        if (textareaRef.value && !props.disabled) {
-          textareaRef.value.focus()
-        }
-      })
-    })
-    
-    return {
-      textareaRef,
-      content,
-      wordCount,
-      canSend,
-      sendButtonText,
-      handleInput,
-      handleKeydown,
-      handleSend
+      return title
     }
   }
-})
+}
 </script>
 
 <style scoped>

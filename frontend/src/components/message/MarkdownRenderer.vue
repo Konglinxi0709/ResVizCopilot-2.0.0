@@ -1,14 +1,14 @@
 <template>
-  <div class="markdown-renderer" :class="{ 'dark-theme': isDarkTheme }">
-    <div v-html="renderedContent" class="markdown-content"></div>
+  <div :class="componentClass">
+    <div v-html="renderedContent" class="markdown-content" @click="handleLinkClick"></div>
   </div>
 </template>
 
 <script>
-import { defineComponent, computed, watch, ref } from 'vue'
+import MarkdownIt from 'markdown-it'
 import { useUIStore } from '@/stores/uiStore'
 
-export default defineComponent({
+export default {
   name: 'MarkdownRenderer',
   
   props: {
@@ -23,93 +23,162 @@ export default defineComponent({
       default: true
     },
     
-    // 是否启用数学公式渲染
-    enableMath: {
+    // 是否启用链接
+    enableLinks: {
       type: Boolean,
       default: true
+    },
+    
+    // 自定义CSS类
+    customClass: {
+      type: String,
+      default: ''
     }
   },
   
-  setup(props) {
-    const uiStore = useUIStore()
-    const renderedContent = ref('')
+  data() {
+    return {
+      uiStore: null,
+      renderedContent: '',
+      md: null
+    }
+  },
+  
+  computed: {
+    isDarkTheme() {
+      return this.uiStore?.isDarkTheme || false
+    },
     
-    const isDarkTheme = computed(() => uiStore.isDarkTheme)
+    // 渲染后的HTML内容
+    htmlContent() {
+      if (!this.content) return ''
+      
+      try {
+        return this.md.render(this.content)
+      } catch (error) {
+        console.error('Markdown渲染失败:', error)
+        return `<p>${this.escapeHtml(this.content)}</p>`
+      }
+    },
     
-    // 简单的Markdown渲染函数
-    const renderMarkdown = (content) => {
-      if (!content) return ''
+    // 组件CSS类
+    componentClass() {
+      const classes = ['markdown-renderer']
       
-      let html = content
+      if (this.isDarkTheme) {
+        classes.push('dark-theme')
+      }
       
-      // 代码块处理
-      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
-        return `<pre><code class="language-${lang || 'text'}">${escapeHtml(code.trim())}</code></pre>`
+      if (this.customClass) {
+        classes.push(this.customClass)
+      }
+      
+      return classes.join(' ')
+    }
+  },
+  
+  watch: {
+    content: {
+      handler() {
+        this.updateRenderedContent()
+      },
+      immediate: false
+    }
+  },
+  
+  mounted() {
+    this.uiStore = useUIStore()
+    this.initMarkdownIt()
+    // 初始化完成后再进行首次渲染，确保this.md已可用
+    this.updateRenderedContent()
+  },
+  
+  methods: {
+    // 初始化MarkdownIt实例
+    initMarkdownIt() {
+      this.md = new MarkdownIt({
+        html: false,
+        linkify: this.enableLinks,
+        typographer: true,
+        breaks: true
       })
       
-      // 行内代码
-      html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+      // 配置插件
+      if (this.enableHighlight) {
+        this.configureHighlight()
+      }
       
-      // 标题
-      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // 配置链接处理
+      if (this.enableLinks) {
+        this.configureLinks()
+      }
+    },
+    
+    // 配置语法高亮
+    configureHighlight() {
+      // 这里可以添加语法高亮插件
+      // 例如：highlight.js 或 prism.js
+    },
+    
+    // 配置链接处理
+    configureLinks() {
+      // 自定义链接渲染
+      const defaultRender = this.md.renderer.rules.link_open || function(tokens, idx, options, env, self) {
+        return self.renderToken(tokens, idx, options)
+      }
       
-      // 粗体和斜体
-      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-      
-      // 链接
-      html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-      
-      // 列表
-      html = html.replace(/^[\s]*[-*+] (.+)$/gm, '<li>$1</li>')
-      html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-      
-      // 数字列表
-      html = html.replace(/^[\s]*\d+\. (.+)$/gm, '<li>$1</li>')
-      
-      // 引用
-      html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-      
-      // 分割线
-      html = html.replace(/^---$/gm, '<hr>')
-      
-      // 段落处理
-      html = html.split('\n\n').map(paragraph => {
-        const trimmed = paragraph.trim()
-        if (!trimmed) return ''
+      this.md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
+        const token = tokens[idx]
+        const hrefIndex = token.attrIndex('href')
         
-        // 如果已经是HTML标签，直接返回
-        if (trimmed.startsWith('<')) {
-          return trimmed
+        if (hrefIndex >= 0) {
+          const href = token.attrs[hrefIndex][1]
+          
+          // 添加target="_blank"和rel="noopener noreferrer"
+          token.attrPush(['target', '_blank'])
+          token.attrPush(['rel', 'noopener noreferrer'])
+          
+          // 添加安全提示
+          if (href.startsWith('http')) {
+            token.attrPush(['title', `外部链接: ${href}`])
+          }
         }
         
-        // 否则包装成段落
-        return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`
-      }).join('\n')
-      
-      return html
-    }
+        return defaultRender(tokens, idx, options, env, self)
+      }
+    },
     
-    // HTML转义函数
-    const escapeHtml = (text) => {
+    // 更新渲染内容
+    updateRenderedContent() {
+      this.renderedContent = this.htmlContent
+    },
+    
+    // HTML转义
+    escapeHtml(text) {
       const div = document.createElement('div')
       div.textContent = text
       return div.innerHTML
-    }
+    },
     
-    // 监听内容变化，重新渲染
-    watch(() => props.content, (newContent) => {
-      renderedContent.value = renderMarkdown(newContent)
-    }, { immediate: true })
-    
-    return {
-      renderedContent,
-      isDarkTheme
+    // 处理链接点击
+    handleLinkClick(event) {
+      const link = event.target.closest('a')
+      if (!link) return
+      
+      const href = link.getAttribute('href')
+      if (!href) return
+      
+      // 如果是外部链接，使用默认行为
+      if (href.startsWith('http')) {
+        return
+      }
+      
+      // 如果是内部链接，可以在这里处理
+      event.preventDefault()
+      console.log('内部链接点击:', href)
     }
   }
-})
+}
 </script>
 
 <style scoped>

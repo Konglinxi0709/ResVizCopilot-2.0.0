@@ -45,7 +45,7 @@
         <p>mind实例: {{ !!mind }}</p>
         <p>isInitialized: {{ isInitialized }}</p>
         <div style="margin-top: 10px;">
-          <el-button type="primary" @click="refreshData" size="small">重新加载</el-button>
+          <el-button type="primary" @click="$emit('refresh-data')" size="small">重新加载</el-button>
         </div>
       </div>
     </div>
@@ -53,10 +53,11 @@
 </template>
 
 <script>
+import { defineComponent } from 'vue'
 import MindElixir from 'mind-elixir'
 import { Camera, Loading } from '@element-plus/icons-vue'
 
-export default {
+export default defineComponent({
   name: 'MindElixirWrapper',
   
   components: {
@@ -148,116 +149,104 @@ export default {
       console.log('mindElixirData:', this.mindElixirData)
       
       if (!this.$refs.mindElixirEl) {
-        console.error('❌ 找不到Mind-elixir容器元素')
+        console.error('❌ Mind-elixir容器元素未找到')
         return
       }
       
       try {
-        // 创建Mind-elixir配置
-        const config = this.createMindElixirConfig()
+                 // 基础只读配置（参考老项目的简洁配置）
+         const config = {
+           el: this.$refs.mindElixirEl,
+           direction: MindElixir.RIGHT, // 侧边布局
+           locale: 'zh_CN',
+           
+           // 设置亮色主题
+           theme: {
+             name: 'Default',
+             palette: ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#909399'],
+             cssVar: {
+               '--main-color': '#303133',
+               '--main-bgcolor': '#ffffff',
+               '--color': '#606266',
+               '--bgcolor': '#f5f7fa'
+             }
+           },
+           
+           // 禁用编辑功能
+           draggable: false,
+           editable: false,
+           contextMenu: false,
+           //toolBar: false,
+           nodeMenu: false,
+           keypress: false,
+           
+           // 禁用关键编辑操作
+           before: {
+             copyNode: () => false,
+             copyNodes: () => false,
+             insertSibling: () => false,
+             insertParent: () => false,
+             addChild: () => false,
+             removeNode: () => false,
+             removeNodes: () => false,
+             moveNode: () => false,
+             beginEdit: () => false
+           },
+           
+           // 合并自定义配置
+           ...this.options
+         }
         
-        // 初始化Mind-elixir实例
+        // 创建Mind-elixir实例
+        console.log('⚙️ 创建Mind-elixir实例，配置:', config)
         this.mind = new MindElixir(config)
-        
         console.log('✅ Mind-elixir实例创建成功:', this.mind)
+        
+        // 添加节点选择事件监听
+        this.mind.bus.addListener('selectNode', this.handleNodeSelect)
+        this.mind.bus.addListener('unselectNode', this.handleNodeUnselect)
+        
+        this.isInitialized = true
+        console.log('✅ Mind-elixir初始化完成')
         
         // 如果有数据，立即渲染
         if (this.mindElixirData) {
+          console.log('📊 有初始数据，开始渲染')
           this.updateMindMap(this.mindElixirData)
+        } else {
+          console.log('📊 暂无初始数据')
         }
-        
-        this.isInitialized = true
-        console.log('🎉 Mind-elixir初始化完成')
         
       } catch (error) {
-        console.error('❌ Mind-elixir初始化失败:', error)
+        console.error('Mind-elixir初始化失败:', error)
+        this.$message.error('思维导图初始化失败')
       }
-    },
-    
-    // 创建Mind-elixir配置
-    createMindElixirConfig() {
-      const baseConfig = {
-        el: this.$refs.mindElixirEl,
-        direction: MindElixir.RIGHT,
-        locale: 'zh_CN',
-        // 关键：限制内部画布尺寸的扩展，避免 map-canvas 无限增大
-        overflowHidden: true,
-        
-        // 只读模式配置
-        draggable: false,
-        editable: false,
-        contextMenu: false,
-        toolBar: true,
-        keypress: false,
-        
-        // 禁用所有编辑操作
-        before: {
-          insertSibling: () => false,
-          insertParent: () => false,
-          addChild: () => false,
-          removeNode: () => false,
-          removeNodes: () => false,
-          moveNode: () => false,
-          moveUpNode: () => false,
-          moveDownNode: () => false,
-          moveNodeIn: () => false,
-          moveNodeBefore: () => false,
-          moveNodeAfter: () => false,
-          copyNode: () => false,
-          copyNodes: () => false,
-          beginEdit: () => false
-        },
-        
-        // 主题配置
-        theme: {
-          name: 'Default',
-          cssVar: {
-            '--main-bgcolor': '#ffffff',
-            '--main-color': '#303133',
-            '--color': '#666666',
-            '--bgcolor': '#f6f6f6'
-          }
-        }
-      }
-      
-      // 合并自定义配置
-      return { ...baseConfig, ...this.options }
     },
     
     // 更新思维导图数据
     updateMindMap(data) {
-      if (!this.mind || !data) {
-        console.warn('⚠️ 无法更新思维导图：mind实例或数据不存在')
+      if (!this.mind || !data || !data.nodeData) {
+        console.warn('Mind-elixir实例或数据未准备好')
         return
       }
       
       try {
-        console.log('🔄 更新思维导图数据:', data)
+        // 处理智能体操作状态
+        const processedData = this.processAgentOperatingState(data)
         
-        // 确保数据格式正确
-        let nodeData = null
-        if (data.nodeData) {
-          nodeData = data.nodeData
-        } else if (data.id && data.topic) {
-          // 如果data本身就是节点数据
-          nodeData = data
-        } else {
-          throw new Error('无效的数据格式：缺少nodeData或有效的节点数据')
-        }
-        
-        // 验证节点数据的完整性
-        if (!nodeData.id || !nodeData.topic) {
-          throw new Error('节点数据不完整：缺少id或topic')
-        }
-        
-        console.log('🎯 准备传递给Mind-elixir的数据:', nodeData)
+        // 打印详细数据信息
+        console.log('🔍 准备渲染的数据:', processedData.nodeData)
+        console.log('🔍 数据结构检查:', {
+          hasNodeData: !!processedData.nodeData,
+          hasId: !!processedData.nodeData?.id,
+          hasTopic: !!processedData.nodeData?.topic,
+          hasChildren: !!processedData.nodeData?.children,
+          childrenCount: processedData.nodeData?.children?.length || 0
+        })
         
         // 使用init方法加载数据（参考老项目）
         // 注意：老项目传入的是完整的data对象，而不是nodeData
-        // Mind-elixir期望接收包含nodeData和theme的完整对象
-        this.mind.init(data)
-        
-        console.log('✅ 思维导图数据更新成功')
+        this.mind.init(processedData)
         
         // 检查init后的状态
         console.log('🔍 Mind-elixir init后状态:', {
@@ -267,7 +256,7 @@ export default {
           container: !!this.mind.container
         })
         
-        // 强制重新渲染和布局（参考老版本）
+        // 强制重新渲染和布局
         this.$nextTick(() => {
           if (this.mind && this.mind.painter) {
             console.log('🎨 尝试手动触发绘制')
@@ -275,105 +264,110 @@ export default {
             if (this.mind.layout) {
               this.mind.layout()
             }
-            // 尝试手动绘制
+                        // 尝试手动绘制
             if (this.mind.painter.draw) {
               this.mind.painter.draw()
             }
           }
         })
         
-        // 数据更新成功后，应用主题（如果有）
+        // 应用主题（在init之后）
         if (data.theme) {
-          try {
-            setTimeout(() => {
+          setTimeout(() => {
+            try {
               this.mind.changeTheme(data.theme)
-              console.log('🎨 主题应用成功')
-            }, 200) // 增加延迟，确保数据完全渲染
-          } catch (themeError) {
-            console.warn('⚠️ 主题应用失败:', themeError)
+            } catch (themeError) {
+              console.warn('主题应用失败:', themeError)
+            }
+          }, 100) // 延迟应用主题，确保init完成
+        }
+        
+        console.log('Mind-elixir数据更新完成')
+        
+      } catch (error) {
+        console.error('Mind-elixir数据更新失败:', error)
+        this.$message?.error('思维导图更新失败')
+      }
+    },
+    
+    // 处理智能体操作状态
+    processAgentOperatingState(data) {
+      if (!this.agentOperatingNodeId) {
+        return data
+      }
+      
+      // 深度克隆数据以避免修改原始数据
+      const processedData = JSON.parse(JSON.stringify(data))
+      
+      // 递归查找并标记智能体操作的节点
+      const markAgentOperating = (node) => {
+        if (node.id === this.agentOperatingNodeId) {
+          // 添加智能体操作标识
+          node.icons = [...(node.icons || []), '🤖']
+          if (node.style) {
+            node.style.borderColor = '#fa8c16'
+            node.style.borderWidth = '3px'
+            node.style.animation = 'pulse 2s infinite'
           }
         }
         
-      } catch (error) {
-        console.error('❌ 更新思维导图失败:', error)
-        console.error('❌ 错误详情:', {
-          message: error.message,
-          stack: error.stack,
-          data: data
-        })
-        
-        // 尝试重新初始化Mind-elixir
-        console.log('🔄 尝试重新初始化Mind-elixir...')
-        this.reinitializeMindElixir()
+        if (node.children) {
+          node.children.forEach(markAgentOperating)
+        }
       }
+      
+      if (processedData.nodeData) {
+        markAgentOperating(processedData.nodeData)
+      }
+      
+      return processedData
     },
     
-    // 安全的数据刷新方法
-    safeRefresh() {
-      try {
-        console.log('🔄 尝试安全刷新数据...')
-        
-        // 如果mind实例存在，先销毁
-        if (this.mind) {
-          this.mind.destroy()
-          this.mind = null
-        }
-        
-        // 重新初始化
-        this.initMindElixir()
-        
-      } catch (error) {
-        console.error('❌ 安全刷新也失败:', error)
-      }
-    },
-    
-    // 重新初始化Mind-elixir
-    reinitializeMindElixir() {
-      try {
-        if (this.mind) {
-          this.mind.destroy()
-          this.mind = null
-        }
-        
-        this.isInitialized = false
-        
-        // 延迟重新初始化，避免立即重试
-        setTimeout(() => {
-          this.initMindElixir()
-        }, 100)
-        
-      } catch (error) {
-        console.error('❌ 重新初始化失败:', error)
-        this.$message?.error('思维导图重新初始化失败')
-      }
-    },
+
     
     // 处理节点选择事件
     handleNodeSelect(nodeObj) {
-      console.log('🎯 节点被选中:', nodeObj)
+      if (!nodeObj || nodeObj.id === 'root') {
+        return
+      }
       
-      const nodeInfo = {
+      console.log('节点被选中:', nodeObj)
+      
+      this.$emit('node-selected', {
         id: nodeObj.id,
         title: nodeObj.topic,
         data: nodeObj
-      }
-      
-      this.$emit('node-selected', nodeInfo)
+      })
+    },
+    
+    // 处理节点取消选择事件
+    handleNodeUnselect() {
+      console.log('节点取消选中')
     },
     
     // 退出快照查看
     exitSnapshotView() {
-      console.log('📸 退出快照查看模式')
       this.$emit('exit-snapshot-view')
     },
     
-    // 刷新数据
-    refreshData() {
-      console.log('🔄 请求刷新数据')
-      this.$emit('refresh-data')
-    }
+    // 获取Mind-elixir实例（供外部使用）
+    getMindInstance() {
+      return this.mind
+    },
+    
+    // 重新初始化（供外部调用）
+    reinitialize() {
+      if (this.mind) {
+        this.mind.destroy()
+      }
+      this.$nextTick(() => {
+        this.initMindElixir()
+      })
+    },
+    
+
   }
-}
+})
 </script>
 
 <style scoped>

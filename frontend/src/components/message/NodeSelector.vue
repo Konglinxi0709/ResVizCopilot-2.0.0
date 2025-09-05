@@ -160,13 +160,12 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, watch } from 'vue'
 import { 
   Operation, Warning, InfoFilled, StarFilled, Share,
   QuestionFilled, Cpu, Check 
 } from '@element-plus/icons-vue'
 
-export default defineComponent({
+export default {
   name: 'NodeSelector',
   
   components: {
@@ -202,37 +201,39 @@ export default defineComponent({
   
   emits: ['update:modelValue', 'node-changed'],
   
-  setup(props, { emit }) {
-    const selectedNode = ref(props.modelValue)
-    const searchFilter = ref('')
-    
-    // 智能体配置
-    const agentNodeConfigs = {
-      'auto_research_agent': {
-        nodeType: 'problem',
-        nodeFilter: (node) => node.type === 'problem' && node.problem_type === 'implementation',
-        title: '选择实施问题',
-        placeholder: '请选择要自动生成解决方案的实施问题',
-        noNodesTitle: '暂无可用的实施问题',
-        noNodesMessage: '自动研究智能体需要实施类型的问题节点，请先创建一个实施问题。',
-        canCreateNode: true,
-        createNodeText: '创建实施问题'
-      },
-      'user_chat_agent': {
-        nodeType: 'solution',
-        nodeFilter: (node) => node.type === 'solution',
-        title: '选择解决方案',
-        placeholder: '请选择要对话的解决方案节点',
-        noNodesTitle: '暂无可用的解决方案',
-        noNodesMessage: '用户对话智能体需要解决方案节点，请先生成一些解决方案。',
-        canCreateNode: false,
-        createNodeText: '生成解决方案'
+  data() {
+    return {
+      selectedNode: this.modelValue,
+      searchFilter: '',
+      agentNodeConfigs: {
+        'auto_research_agent': {
+          nodeType: 'problem',
+          nodeFilter: (node) => node.type === 'problem' && node.problem_type === 'implementation',
+          title: '选择实施问题',
+          placeholder: '请选择要自动生成解决方案的实施问题',
+          noNodesTitle: '暂无可用的实施问题',
+          noNodesMessage: '自动研究智能体需要实施类型的问题节点，请先创建一个实施问题。',
+          canCreateNode: true,
+          createNodeText: '创建实施问题'
+        },
+        'user_chat_agent': {
+          nodeType: 'solution',
+          nodeFilter: (node) => node.type === 'solution',
+          title: '选择解决方案',
+          placeholder: '请选择要对话的解决方案节点',
+          noNodesTitle: '暂无可用的解决方案',
+          noNodesMessage: '用户对话智能体需要解决方案节点，请先生成一些解决方案。',
+          canCreateNode: false,
+          createNodeText: '生成解决方案'
+        }
       }
     }
-    
+  },
+  
+  computed: {
     // 当前智能体配置
-    const currentConfig = computed(() => {
-      return agentNodeConfigs[props.agentType] || {
+    currentConfig() {
+      return this.agentNodeConfigs[this.agentType] || {
         nodeType: 'any',
         nodeFilter: () => true,
         title: '选择节点',
@@ -242,106 +243,106 @@ export default defineComponent({
         canCreateNode: false,
         createNodeText: '创建节点'
       }
-    })
+    },
     
     // 是否显示选择器
-    const shouldShowSelector = computed(() => {
-      return props.agentType && agentNodeConfigs[props.agentType]
-    })
+    shouldShowSelector() {
+      return !!(this.agentType && this.agentNodeConfigs[this.agentType])
+    },
     
     // 过滤的节点列表
-    const filteredNodes = computed(() => {
-      if (!props.availableNodes || props.availableNodes.length === 0) {
+    filteredNodes() {
+      if (!this.availableNodes || this.availableNodes.length === 0) {
         return []
       }
-      
-      return props.availableNodes.filter(node => {
-        return currentConfig.value.nodeFilter(node)
-      })
-    })
+      return this.availableNodes.filter(node => this.currentConfig.nodeFilter(node))
+    },
     
     // 显示的节点（应用搜索过滤）
-    const displayNodes = computed(() => {
-      if (!searchFilter.value) {
-        return filteredNodes.value
+    displayNodes() {
+      if (!this.searchFilter) {
+        return this.filteredNodes
       }
-      
-      const filter = searchFilter.value.toLowerCase()
-      return filteredNodes.value.filter(node => {
-        return (
-          node.title.toLowerCase().includes(filter) ||
-          (node.significance && node.significance.toLowerCase().includes(filter)) ||
-          (node.top_level_thoughts && node.top_level_thoughts.toLowerCase().includes(filter))
-        )
-      })
-    })
+      const filter = this.searchFilter.toLowerCase()
+      return this.filteredNodes.filter(node => (
+        node.title.toLowerCase().includes(filter) ||
+        (node.significance && node.significance.toLowerCase().includes(filter)) ||
+        (node.top_level_thoughts && node.top_level_thoughts.toLowerCase().includes(filter))
+      ))
+    },
     
     // 选中的节点信息
-    const selectedNodeInfo = computed(() => {
-      if (!selectedNode.value) return null
-      return findNodeById(props.availableNodes, selectedNode.value)
-    })
+    selectedNodeInfo() {
+      if (!this.selectedNode) return null
+      return this.findNodeById(this.availableNodes, this.selectedNode)
+    },
     
-    // 计算属性：各种显示文本
-    const selectorTitle = computed(() => currentConfig.value.title)
-    const selectPlaceholder = computed(() => currentConfig.value.placeholder)
-    const noNodesTitle = computed(() => currentConfig.value.noNodesTitle)
-    const noNodesMessage = computed(() => currentConfig.value.noNodesMessage)
-    const canCreateNode = computed(() => currentConfig.value.canCreateNode)
-    const createNodeText = computed(() => currentConfig.value.createNodeText)
-    
+    // 文本派生
+    selectorTitle() { return this.currentConfig.title },
+    selectPlaceholder() { return this.currentConfig.placeholder },
+    noNodesTitle() { return this.currentConfig.noNodesTitle },
+    noNodesMessage() { return this.currentConfig.noNodesMessage },
+    canCreateNode() { return this.currentConfig.canCreateNode },
+    createNodeText() { return this.currentConfig.createNodeText }
+  },
+  
+  watch: {
+    modelValue(newValue) {
+      this.selectedNode = newValue
+    },
+    agentType() {
+      this.selectedNode = ''
+      this.$emit('update:modelValue', '')
+    }
+  },
+  
+  methods: {
     // 根据ID查找节点
-    const findNodeById = (nodes, nodeId) => {
+    findNodeById(nodes, nodeId) {
       for (const node of nodes) {
         if (node.id === nodeId) {
           return node
         }
         if (node.children) {
-          const found = findNodeById(node.children, nodeId)
+          const found = this.findNodeById(node.children, nodeId)
           if (found) return found
         }
       }
       return null
-    }
-    
-    // 获取节点路径
-    const getNodePath = (node) => {
-      // 这里简化实现，实际应该从根节点开始构建路径
-      const parentPath = getNodeParentPath(props.availableNodes, node.id)
-      return parentPath.length > 0 ? parentPath.join(' > ') : '根节点'
-    }
+    },
     
     // 获取节点父路径
-    const getNodeParentPath = (nodes, targetId, currentPath = []) => {
+    getNodeParentPath(nodes, targetId, currentPath = []) {
       for (const node of nodes) {
         const newPath = [...currentPath, node.title]
-        
         if (node.id === targetId) {
-          return currentPath // 返回父路径，不包含自己
+          return currentPath
         }
-        
         if (node.children) {
-          const result = getNodeParentPath(node.children, targetId, newPath)
+          const result = this.getNodeParentPath(node.children, targetId, newPath)
           if (result.length > 0) {
             return result
           }
         }
       }
       return []
-    }
+    },
+    
+    // 获取节点路径
+    getNodePath(node) {
+      const parentPath = this.getNodeParentPath(this.availableNodes, node.id)
+      return parentPath.length > 0 ? parentPath.join(' > ') : '根节点'
+    },
     
     // 获取节点图标
-    const getNodeIcon = (node) => {
-      if (node.type === 'problem') {
-        return 'QuestionFilled'
-      } else if (node.type === 'solution') {
-        return 'Cpu'
-      }
+    getNodeIcon(node) {
+      if (node.type === 'problem') return 'QuestionFilled'
+      if (node.type === 'solution') return 'Cpu'
       return 'Check'
-    }
+    },
     
     // 获取节点颜色
-    const getNodeColor = (node) => {
+    getNodeColor(node) {
       if (node.type === 'problem') {
         return node.problem_type === 'implementation' ? '#409eff' : '#e6a23c'
       } else if (node.type === 'solution') {
@@ -353,30 +354,30 @@ export default defineComponent({
         }
       }
       return '#909399'
-    }
+    },
     
     // 获取节点类型文本
-    const getNodeTypeText = (node) => {
+    getNodeTypeText(node) {
       if (node.type === 'problem') {
         return node.problem_type === 'implementation' ? '实施问题' : '条件问题'
       } else if (node.type === 'solution') {
         return '解决方案'
       }
       return '未知'
-    }
+    },
     
     // 获取节点类型标签类型
-    const getNodeTypeTagType = (node) => {
+    getNodeTypeTagType(node) {
       if (node.type === 'problem') {
         return node.problem_type === 'implementation' ? 'primary' : 'warning'
       } else if (node.type === 'solution') {
         return 'success'
       }
       return 'info'
-    }
+    },
     
     // 获取状态文本
-    const getStateText = (state) => {
+    getStateText(state) {
       switch (state) {
         case 'pending': return '待处理'
         case 'in_progress': return '进行中'
@@ -384,10 +385,10 @@ export default defineComponent({
         case 'failed': return '失败'
         default: return state
       }
-    }
+    },
     
     // 获取状态标签类型
-    const getStateTagType = (state) => {
+    getStateTagType(state) {
       switch (state) {
         case 'pending': return 'info'
         case 'in_progress': return 'warning'
@@ -395,72 +396,35 @@ export default defineComponent({
         case 'failed': return 'danger'
         default: return 'info'
       }
-    }
+    },
     
     // 截断标题
-    const truncateTitle = (title, maxLength) => {
+    truncateTitle(title, maxLength) {
       if (!title) return ''
       return title.length > maxLength ? title.slice(0, maxLength) + '...' : title
-    }
+    },
     
     // 搜索过滤
-    const filterNodes = (query) => {
-      searchFilter.value = query
-    }
+    filterNodes(query) {
+      this.searchFilter = query
+    },
     
     // 处理节点变化
-    const handleNodeChange = (value) => {
-      selectedNode.value = value
-      emit('update:modelValue', value)
-      
-      const nodeInfo = findNodeById(props.availableNodes, value)
-      emit('node-changed', nodeInfo)
-    }
+    handleNodeChange(value) {
+      this.selectedNode = value
+      this.$emit('update:modelValue', value)
+      const nodeInfo = this.findNodeById(this.availableNodes, value)
+      this.$emit('node-changed', nodeInfo)
+    },
     
-    // 处理创建节点
-    const handleCreateNode = () => {
+    // 处理创建节点（预留）
+    handleCreateNode() {
       // 这里应该触发创建节点的操作
-      console.log('创建节点:', currentConfig.value.nodeType)
-      // emit('create-node', currentConfig.value.nodeType)
-    }
-    
-    // 监听外部变化
-    watch(() => props.modelValue, (newValue) => {
-      selectedNode.value = newValue
-    })
-    
-    // 监听智能体类型变化，重置选择
-    watch(() => props.agentType, () => {
-      selectedNode.value = ''
-      emit('update:modelValue', '')
-    })
-    
-    return {
-      selectedNode,
-      shouldShowSelector,
-      filteredNodes,
-      displayNodes,
-      selectedNodeInfo,
-      selectorTitle,
-      selectPlaceholder,
-      noNodesTitle,
-      noNodesMessage,
-      canCreateNode,
-      createNodeText,
-      getNodeIcon,
-      getNodeColor,
-      getNodeTypeText,
-      getNodeTypeTagType,
-      getStateText,
-      getStateTagType,
-      getNodePath,
-      truncateTitle,
-      filterNodes,
-      handleNodeChange,
-      handleCreateNode
+      console.log('创建节点:', this.currentConfig.nodeType)
+      // this.$emit('create-node', this.currentConfig.nodeType)
     }
   }
-})
+}
 </script>
 
 <style scoped>

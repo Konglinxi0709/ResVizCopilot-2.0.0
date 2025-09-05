@@ -71,7 +71,7 @@
         <el-button 
           type="text" 
           class="setting-btn"
-          @click="toggleTheme"
+          @click="handleThemeChange"
         >
           <el-icon>
             <Sunny v-if="currentTheme === 'dark'" />
@@ -93,17 +93,17 @@
           <el-input
             v-model="createForm.name"
             placeholder="请输入工程名称"
-            @keyup.enter="confirmCreate"
+            @keyup.enter="confirmCreateProject"
           />
         </el-form-item>
       </el-form>
       
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="cancelCreate">{{ $t('app.cancel') }}</el-button>
+          <el-button @click="cancelCreateProject">{{ $t('app.cancel') }}</el-button>
           <el-button 
             type="primary" 
-            @click="confirmCreate"
+            @click="confirmCreateProject"
             :loading="isCreating"
           >
             {{ $t('app.confirm') }}
@@ -115,7 +115,6 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { 
   Folder, Plus, Document, Sunny, Moon 
@@ -124,7 +123,7 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useUIStore } from '@/stores/uiStore'
 import dayjs from 'dayjs'
 
-export default defineComponent({
+export default {
   name: 'AppHeader',
   
   components: {
@@ -140,64 +139,59 @@ export default defineComponent({
   
   emits: ['language-change', 'theme-change'],
   
-  setup() {
-    const projectStore = useProjectStore()
-    const uiStore = useUIStore()
-    
-    // 响应式数据
-    const showCreateDialog = ref(false)
-    const isCreating = ref(false)
-    const isSaving = ref(false)
-    const createFormRef = ref(null)
-    
-    const createForm = ref({
-      name: ''
-    })
-    
-    const createRules = {
-      name: [
-        { required: true, message: '请输入工程名称', trigger: 'blur' },
-        { min: 1, max: 50, message: '工程名称长度在 1 到 50 个字符', trigger: 'blur' },
-        {
-          validator: (rule, value, callback) => {
-            if (projectStore.isProjectNameExists(value)) {
-              callback(new Error('工程名称已存在'))
-            } else {
-              callback()
-            }
-          },
-          trigger: 'blur'
-        }
-      ]
-    }
-    
-    // 计算属性
-    const currentTheme = computed(() => uiStore.theme)
-    const lastSaveTime = computed(() => projectStore.lastSaveTime)
-    const isOperationDisabled = computed(() => {
-      // 当有智能体正在工作或其他操作进行中时禁用
-      return projectStore.isLoading || uiStore.isLoading
-    })
-    
-    const currentLanguageLabel = computed(() => {
-      const locale = uiStore.language
-      return locale === 'zh-CN' ? '中文' : 'English'
-    })
-    
+  data() {
     return {
-      projectStore,
-      uiStore,
-      showCreateDialog,
-      isCreating,
-      isSaving,
-      createFormRef,
-      createForm,
-      createRules,
-      currentTheme,
-      lastSaveTime,
-      isOperationDisabled,
-      currentLanguageLabel
+      projectStore: null,
+      uiStore: null,
+      showCreateDialog: false,
+      isCreating: false,
+      isSaving: false,
+      createFormRef: null,
+      createForm: {
+        name: ''
+      },
+      createRules: {
+        name: [
+          { required: true, message: '请输入工程名称', trigger: 'blur' },
+          { min: 1, max: 50, message: '工程名称长度在 1 到 50 个字符', trigger: 'blur' },
+          {
+            validator: (rule, value, callback) => {
+              if (this.projectStore?.isProjectNameExists(value)) {
+                callback(new Error('工程名称已存在'))
+              } else {
+                callback()
+              }
+            },
+            trigger: 'blur'
+          }
+        ]
+      }
     }
+  },
+  
+  computed: {
+    currentTheme() {
+      return this.uiStore?.theme
+    },
+    
+    lastSaveTime() {
+      return this.projectStore?.lastSaveTime
+    },
+    
+    isOperationDisabled() {
+      // 当有智能体正在工作或其他操作进行中时禁用
+      return this.projectStore?.isLoading || this.uiStore?.isLoading
+    },
+    
+    currentLanguageLabel() {
+      const locale = this.uiStore?.language
+      return locale === 'zh-CN' ? '中文' : 'English'
+    }
+  },
+  
+  mounted() {
+    this.projectStore = useProjectStore()
+    this.uiStore = useUIStore()
   },
   
   methods: {
@@ -208,77 +202,79 @@ export default defineComponent({
       
       // 等待对话框打开后聚焦输入框
       this.$nextTick(() => {
-        this.$refs.createFormRef?.clearValidate()
+        if (this.createFormRef) {
+          this.createFormRef.focus()
+        }
       })
     },
     
     // 确认创建工程
-    async confirmCreate() {
+    async confirmCreateProject() {
+      if (!this.createFormRef) return
+      
       try {
-        // 验证表单
-        const valid = await this.$refs.createFormRef.validate()
-        if (!valid) return
+        await this.createFormRef.validate()
         
         this.isCreating = true
-        
-        // 创建工程
         await this.projectStore.createProject(this.createForm.name)
         
         ElMessage.success(`工程 "${this.createForm.name}" 创建成功`)
         this.showCreateDialog = false
-        
+        this.createForm.name = ''
       } catch (error) {
         console.error('创建工程失败:', error)
-        ElMessage.error(error.message || '创建工程失败')
+        ElMessage.error('创建工程失败')
       } finally {
         this.isCreating = false
       }
     },
     
     // 取消创建工程
-    cancelCreate() {
+    cancelCreateProject() {
       this.showCreateDialog = false
       this.createForm.name = ''
     },
     
-    // 处理保存工程
+    // 保存当前工程
     async handleSaveProject() {
+      if (!this.currentProject) {
+        ElMessage.warning('请先加载一个工程')
+        return
+      }
+      
       try {
         this.isSaving = true
-        
         await this.projectStore.saveProject()
-        
         ElMessage.success('工程保存成功')
       } catch (error) {
         console.error('保存工程失败:', error)
-        ElMessage.error(error.message || '保存工程失败')
+        ElMessage.error('保存工程失败')
       } finally {
         this.isSaving = false
       }
     },
     
-    // 处理语言切换
-    handleLanguageChange(locale) {
-      this.uiStore.setLanguage(locale)
-      this.$i18n.locale = locale
-      this.$emit('language-change', locale)
-      ElMessage.success(locale === 'zh-CN' ? '已切换到中文' : 'Switched to English')
+    // 切换语言
+    handleLanguageChange() {
+      const newLanguage = this.uiStore.language === 'zh-CN' ? 'en-US' : 'zh-CN'
+      this.uiStore.setLanguage(newLanguage)
+      this.$emit('language-change', newLanguage)
     },
     
     // 切换主题
-    toggleTheme() {
-      const newTheme = this.currentTheme === 'light' ? 'dark' : 'light'
+    handleThemeChange() {
+      const newTheme = this.uiStore.theme === 'light' ? 'dark' : 'light'
       this.uiStore.setTheme(newTheme)
       this.$emit('theme-change', newTheme)
     },
     
     // 格式化时间
-    formatTime(time) {
-      if (!time) return ''
-      return dayjs(time).format('MM-DD HH:mm')
+    formatTime(timeStr) {
+      if (!timeStr) return ''
+      return dayjs(timeStr).format('MM-DD HH:mm')
     }
   }
-})
+}
 </script>
 
 <style scoped>

@@ -65,22 +65,22 @@
       >
         <div class="panel-header">
           <div class="panel-header-left">
-            <el-icon><ChatDotRound /></el-icon>
-            <h3>{{ $t('message.title') }}</h3>
-            <el-tag v-if="messageCount > 0" type="info" size="small">
+            <el-icon v-if="!rightPanelCollapsed"><ChatDotRound /></el-icon>
+            <h3 v-if="!rightPanelCollapsed">{{ $t('message.title') }}</h3>
+            <el-tag v-if="!rightPanelCollapsed && messageCount > 0" type="info" size="small">
               {{ messageCount }} 条消息
             </el-tag>
           </div>
           
           <div class="panel-header-right">
             <!-- 连接状态指示 -->
-            <div class="connection-status" :class="connectionStatusClass">
+            <div v-if="!rightPanelCollapsed" class="connection-status" :class="connectionStatusClass">
               <el-icon><component :is="connectionStatusIcon" /></el-icon>
               <span class="status-text">{{ connectionStatusText }}</span>
             </div>
             
             <!-- 消息操作下拉菜单 -->
-            <el-dropdown @command="handleMessageAction" trigger="click">
+            <el-dropdown v-if="!rightPanelCollapsed" @command="handleMessageAction" trigger="click">
               <el-button type="text" size="small">
                 <el-icon><More /></el-icon>
               </el-button>
@@ -94,13 +94,6 @@
                   >
                     同步消息
                   </el-dropdown-item>
-                  <el-dropdown-item 
-                    command="clear-messages"
-                    :icon="Delete"
-                    divided
-                  >
-                    清空消息
-                  </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -109,9 +102,12 @@
               type="text" 
               @click="toggleRightPanel"
               class="collapse-btn"
+              :class="{ 'collapsed-btn': rightPanelCollapsed }"
             >
-              <ArrowRight v-if="!rightPanelCollapsed" />
-              <ArrowLeft v-else />
+              <el-icon>
+                <ArrowRight v-if="!rightPanelCollapsed" />
+                <ArrowLeft v-else />
+              </el-icon>
             </el-button>
           </div>
         </div>
@@ -135,8 +131,7 @@
 </template>
 
 <script>
-import { defineComponent } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { 
   ArrowLeft, ArrowRight, Camera, ChatDotRound, More, Refresh, Delete,
   Connection, Loading, Check
@@ -150,7 +145,7 @@ import { useTreeStore } from './stores/treeStore'
 import { useMessageStore } from './stores/messageStore'
 import { useUIStore } from './stores/uiStore'
 
-export default defineComponent({
+export default {
   name: 'App',
   components: {
     AppHeader,
@@ -169,71 +164,67 @@ export default defineComponent({
     Check
   },
   
-  setup() {
-    const projectStore = useProjectStore()
-    const treeStore = useTreeStore()
-    const messageStore = useMessageStore()
-    const uiStore = useUIStore()
-    
+  data() {
     return {
-      projectStore,
-      treeStore,
-      messageStore,
-      uiStore
+      // Store实例
+      projectStore: null,
+      treeStore: null,
+      messageStore: null,
+      uiStore: null
     }
   },
   
   computed: {
     currentProject() {
-      return this.projectStore.currentProject
+      return this.projectStore?.currentProject
     },
     
     leftPanelCollapsed() {
-      return this.uiStore.leftPanelCollapsed
+      return this.uiStore?.leftPanelCollapsed
     },
     
     rightPanelCollapsed() {
-      return this.uiStore.rightPanelCollapsed
+      return this.uiStore?.rightPanelCollapsed
     },
     
     isLoading() {
-      return this.uiStore.isLoading
+      return this.uiStore?.isLoading
     },
     
     loadingText() {
-      return this.uiStore.loadingText
+      return this.uiStore?.loadingText
     },
     
     currentSnapshotData() {
-      return this.treeStore.currentSnapshot
+      return this.treeStore?.displaySnapshotData
     },
     
     isViewingSnapshot() {
-      return this.treeStore.isViewingSnapshot
+      return this.treeStore?.isViewingSnapshot
     },
     
     selectedNodeId() {
-      return this.treeStore.selectedNodeId
+      return this.treeStore?.selectedNodeId
     },
     
     agentOperatingNodeId() {
-      return this.treeStore.agentOperatingNodeId
+      return this.treeStore?.agentOperatingNodeId
     },
     
     // 消息相关计算属性
     messageCount() {
-      return this.messageStore.messageCount
+      return this.messageStore?.messageCount
     },
     
     isGenerating() {
-      return this.messageStore.isGenerating
+      return this.messageStore?.isGenerating
     },
     
     // 连接状态
     connectionStatus() {
       if (this.isGenerating) {
         return 'generating'
-      } else if (this.messageStore.error) {
+      } else if (this.messageStore?.error) {
         return 'error'
       } else {
         return 'connected'
@@ -265,6 +256,12 @@ export default defineComponent({
   
   async mounted() {
     try {
+      // 初始化store实例
+      this.projectStore = useProjectStore()
+      this.treeStore = useTreeStore()
+      this.messageStore = useMessageStore()
+      this.uiStore = useUIStore()
+      
       // 初始化应用
       await this.initializeApp()
     } catch (error) {
@@ -298,22 +295,12 @@ export default defineComponent({
         // 加载研究树数据
         await this.treeStore.loadCurrentSnapshot()
       } catch (error) {
-        console.error('加载项目数据失败:', error)
+        console.error('加载当前项目失败:', error)
         ElMessage.error('加载项目数据失败')
       }
     },
     
-    handleLanguageChange(locale) {
-      this.$i18n.locale = locale
-      this.uiStore.setLanguage(locale)
-    },
-    
-    handleThemeChange(theme) {
-      this.uiStore.setTheme(theme)
-      // 应用主题到document
-      document.documentElement.setAttribute('data-theme', theme)
-    },
-    
+    // 面板折叠控制
     toggleLeftPanel() {
       this.uiStore.toggleLeftPanel()
     },
@@ -322,103 +309,74 @@ export default defineComponent({
       this.uiStore.toggleRightPanel()
     },
     
-    async handleProjectChanged(project) {
+    // 项目变更处理
+    async handleProjectChanged() {
       try {
-        this.uiStore.setLoading(true, '正在切换项目...')
-        
-        // 切换项目
-        await this.projectStore.setCurrentProject(project)
-        
-        // 重新加载项目数据
         await this.loadCurrentProject()
-        
-        ElMessage.success(`已切换到项目: ${project.name}`)
+        // 同步消息历史，确保切换工程后右侧面板立即更新
+        if (this.messageStore?.syncMessagesFromBackend) {
+          await this.messageStore.syncMessagesFromBackend()
+        }
+        ElMessage.success('项目切换成功')
       } catch (error) {
-        console.error('切换项目失败:', error)
-        ElMessage.error('切换项目失败')
-      } finally {
-        this.uiStore.setLoading(false)
+        console.error('项目切换失败:', error)
+        ElMessage.error('项目切换失败')
       }
     },
     
+    // 节点选择处理
     handleNodeSelected(nodeInfo) {
       this.treeStore.setSelectedNode(nodeInfo.id)
+      console.log('选中节点:', nodeInfo)
     },
     
+    // 快照查看控制
+    async exitSnapshotView() {
+      await this.treeStore.exitSnapshotView()
+    },
+    
+    // 语言切换
+    handleLanguageChange(language) {
+      this.uiStore.setLanguage(language)
+      if (this.$i18n) {
+        this.$i18n.locale = language
+      }
+    },
+    
+    // 主题切换
+    handleThemeChange(theme) {
+      this.uiStore.setTheme(theme)
+    },
+    
+    // 消息操作
+    async handleMessageAction(command) {
+      switch (command) {
+        case 'sync-messages':
+          await this.messageStore.syncMessagesFromBackend()
+          break
+        default:
+          console.warn('未知的消息操作:', command)
+      }
+    },
+    
+    // 快照查看处理
     async handleViewSnapshot(snapshotId) {
       try {
         await this.treeStore.viewSnapshot(snapshotId)
+        ElMessage.success('快照查看成功')
       } catch (error) {
         console.error('查看快照失败:', error)
         ElMessage.error('查看快照失败')
       }
     },
-
+    
+    // 智能体操作处理
     handleAgentOperating(nodeId) {
       this.treeStore.setAgentOperatingNode(nodeId)
-    },
-    
-    exitSnapshotView() {
-      this.treeStore.exitSnapshotView()
-    },
-    
-    // 消息操作方法
-    async handleMessageAction(command) {
-      try {
-        switch (command) {
-          case 'sync-messages':
-            await this.syncMessages()
-            break
-          case 'clear-messages':
-            await this.clearMessages()
-            break
-        }
-      } catch (error) {
-        console.error('消息操作失败:', error)
-        ElMessage.error('操作失败')
-      }
-    },
-    
-    async syncMessages() {
-      try {
-        const success = await this.messageStore.syncMessagesFromBackend()
-        if (success) {
-          ElMessage.success('消息同步成功')
-        } else {
-          ElMessage.error('消息同步失败')
-        }
-      } catch (error) {
-        console.error('同步消息失败:', error)
-        ElMessage.error('同步消息失败')
-      }
-    },
-    
-    async clearMessages() {
-      try {
-        await ElMessageBox.confirm(
-          '确定要清空所有消息吗？此操作不可恢复。',
-          '确认清空',
-          {
-            confirmButtonText: '确定清空',
-            cancelButtonText: '取消',
-            type: 'warning',
-            confirmButtonClass: 'el-button--danger'
-          }
-        )
-        
-        this.messageStore.clearMessages()
-        ElMessage.success('消息已清空')
-        
-      } catch (error) {
-        // 用户取消操作
-        if (error === 'cancel') {
-          return
-        }
-        throw error
-      }
+      console.log('智能体操作节点:', nodeId)
     }
   }
-})
+}
 </script>
 
 <style>
@@ -426,7 +384,8 @@ export default defineComponent({
 :root {
   --header-height: 60px;
   --panel-header-height: 60px; /* 增加到60px */
-  --sidebar-width: 600px;
+  --left-sidebar-width: 300px; /* 左侧面板宽度 */
+  --right-sidebar-width: 600px; /* 右侧面板宽度 */
   --sidebar-collapsed-width: 50px;
   
   /* 亮色主题 */
@@ -473,9 +432,8 @@ body {
   height: calc(100vh - var(--header-height));
 }
 
-.left-panel,
-.right-panel {
-  width: var(--sidebar-width);
+.left-panel {
+  width: var(--left-sidebar-width);
   background-color: var(--bg-color);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -484,8 +442,13 @@ body {
 }
 
 .right-panel {
+  width: var(--right-sidebar-width);
   border-right: none;
   border-left: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
 }
 
 .left-panel.collapsed,

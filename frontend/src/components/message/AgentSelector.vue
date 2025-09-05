@@ -81,13 +81,12 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, watch } from 'vue'
 import { 
   UserFilled, Cpu, ChatDotRound, InfoFilled, WarningFilled 
 } from '@element-plus/icons-vue'
 import { useMessageStore } from '@/stores/messageStore'
 
-export default defineComponent({
+export default {
   name: 'AgentSelector',
   
   components: {
@@ -116,94 +115,99 @@ export default defineComponent({
   
   emits: ['update:modelValue', 'agent-changed'],
   
-  setup(props, { emit }) {
-    const messageStore = useMessageStore()
-    
-    const selectedAgent = ref(props.modelValue)
-    
-    // 智能体配置
-    const agentConfigs = [
-      {
-        value: 'auto_research_agent',
-        label: '自动研究智能体',
-        description: '为实施问题自动生成解决方案，深度分析问题并提供结构化的解决思路',
-        icon: 'Cpu',
-        status: 'available',
-        requiresNode: true,
-        nodeType: 'problem',
-        nodeFilter: (node) => node.type === 'problem' && node.problem_type === 'implementation',
-        capabilities: [
-          '分析实施问题的复杂性和挑战',
-          '生成结构化的解决方案',
-          '提供详细的实施计划',
-          '考虑技术可行性和资源需求'
-        ],
-        requirements: '需要选择一个实施类型的问题节点',
-        tips: '详细描述你的要求和约束条件，智能体会生成更精准的解决方案'
-      },
-      {
-        value: 'user_chat_agent',
-        label: '用户对话智能体',
-        description: '与解决方案进行深度对话，探讨技术细节、实施方案和优化建议',
-        icon: 'ChatDotRound',
-        status: 'available',
-        requiresNode: true,
-        nodeType: 'solution',
-        nodeFilter: (node) => node.type === 'solution',
-        capabilities: [
-          '深度分析解决方案的技术细节',
-          '讨论实施过程中的挑战',
-          '提供优化建议和改进方案',
-          '回答技术相关问题'
-        ],
-        requirements: '需要选择一个解决方案节点',
-        tips: '可以询问技术实现、潜在风险、替代方案等问题'
-      }
-    ]
-    
+  data() {
+    return {
+      messageStore: null,
+      selectedAgent: this.modelValue,
+      agentConfigs: [
+        {
+          value: 'auto_research_agent',
+          label: '自动研究智能体',
+          description: '为实施问题自动生成解决方案，深度分析问题并提供结构化的解决思路',
+          icon: 'Cpu',
+          status: 'available',
+          requiresNode: true,
+          nodeType: 'problem',
+          nodeFilter: (node) => node.type === 'problem' && node.problem_type === 'implementation',
+          capabilities: [
+            '分析实施问题的复杂性和挑战',
+            '生成结构化的解决方案',
+            '提供详细的实施计划',
+            '考虑技术可行性和资源需求'
+          ],
+          requirements: '需要选择一个实施类型的问题节点',
+          tips: '详细描述你的要求和约束条件，智能体会生成更精准的解决方案'
+        },
+        {
+          value: 'user_chat_agent',
+          label: '用户对话智能体',
+          description: '与解决方案进行深度对话，探讨技术细节、实施方案和优化建议',
+          icon: 'ChatDotRound',
+          status: 'available',
+          requiresNode: true,
+          nodeType: 'solution',
+          nodeFilter: (node) => node.type === 'solution',
+          capabilities: [
+            '深度分析解决方案的技术细节',
+            '讨论实施过程中的挑战',
+            '提供优化建议和改进方案',
+            '回答技术相关问题'
+          ],
+          requirements: '需要选择一个解决方案节点',
+          tips: '可以询问技术实现、潜在风险、替代方案等问题'
+        }
+      ]
+    }
+  },
+  
+  computed: {
     // 计算可用的智能体
-    const availableAgents = computed(() => {
-      return agentConfigs.map(agent => {
+    availableAgents() {
+      return this.agentConfigs.map(agent => {
         let status = 'available'
         let disabled = false
         
         // 检查是否正在生成
-        if (messageStore.isGenerating) {
+        if (this.messageStore?.isGenerating) {
           status = 'busy'
           disabled = true
         }
         
         // 检查节点要求
-        if (agent.requiresNode && props.availableNodes.length > 0) {
-          const hasValidNodes = props.availableNodes.some(node => 
-            agent.nodeFilter(node)
-          )
-          
+        if (agent.requiresNode && this.availableNodes.length > 0) {
+          const hasValidNodes = this.availableNodes.some(node => agent.nodeFilter(node))
           if (!hasValidNodes) {
             status = 'unavailable'
             disabled = true
           }
-        } else if (agent.requiresNode && props.availableNodes.length === 0) {
+        } else if (agent.requiresNode && this.availableNodes.length === 0) {
           status = 'no_data'
           disabled = true
         }
         
-        return {
-          ...agent,
-          status,
-          disabled
-        }
+        return { ...agent, status, disabled }
       })
-    })
+    },
     
     // 当前选中的智能体信息
-    const selectedAgentInfo = computed(() => {
-      if (!selectedAgent.value) return null
-      return availableAgents.value.find(agent => agent.value === selectedAgent.value)
-    })
-    
-    // 获取状态类型
-    const getStatusType = (status) => {
+    selectedAgentInfo() {
+      if (!this.selectedAgent) return null
+      return this.availableAgents.find(agent => agent.value === this.selectedAgent)
+    }
+  },
+  
+  watch: {
+    modelValue(newVal) {
+      this.selectedAgent = newVal
+    }
+  },
+  
+  mounted() {
+    this.messageStore = useMessageStore()
+  },
+  
+  methods: {
+    getStatusType(status) {
       switch (status) {
         case 'available': return 'success'
         case 'busy': return 'warning'
@@ -211,10 +215,9 @@ export default defineComponent({
         case 'no_data': return 'info'
         default: return 'info'
       }
-    }
+    },
     
-    // 获取状态文本
-    const getStatusText = (status) => {
+    getStatusText(status) {
       switch (status) {
         case 'available': return '可用'
         case 'busy': return '忙碌'
@@ -222,44 +225,15 @@ export default defineComponent({
         case 'no_data': return '无数据'
         default: return '未知'
       }
-    }
+    },
     
-    // 处理智能体变化
-    const handleAgentChange = (value) => {
-      selectedAgent.value = value
-      emit('update:modelValue', value)
-      
-      const agentInfo = availableAgents.value.find(agent => agent.value === value)
-      emit('agent-changed', agentInfo)
-    }
-    
-    // 监听外部变化
-    watch(() => props.modelValue, (newValue) => {
-      selectedAgent.value = newValue
-    })
-    
-    // 监听智能体生成状态
-    watch(() => messageStore.isGenerating, (isGenerating) => {
-      if (isGenerating) {
-        // 智能体开始生成时，可以显示当前使用的智能体
-        const currentAgent = messageStore.currentAgentName
-        if (currentAgent && currentAgent !== selectedAgent.value) {
-          selectedAgent.value = currentAgent
-          emit('update:modelValue', currentAgent)
-        }
-      }
-    })
-    
-    return {
-      selectedAgent,
-      availableAgents,
-      selectedAgentInfo,
-      getStatusType,
-      getStatusText,
-      handleAgentChange
+    handleAgentChange(value) {
+      this.selectedAgent = value
+      this.$emit('update:modelValue', value)
+      this.$emit('agent-changed', value)
     }
   }
-})
+}
 </script>
 
 <style scoped>

@@ -93,7 +93,7 @@
       </el-form>
       
       <template #footer>
-        <el-button @click="showSaveAsDialog = false">取消</el-button>
+        <el-button @click="cancelSaveAs">取消</el-button>
         <el-button 
           type="primary" 
           @click="confirmSaveAs"
@@ -107,13 +107,12 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, MoreFilled } from '@element-plus/icons-vue'
 import { useProjectStore } from '@/stores/projectStore'
 import dayjs from 'dayjs'
 
-export default defineComponent({
+export default {
   name: 'ProjectManager',
   
   components: {
@@ -122,43 +121,40 @@ export default defineComponent({
   
   emits: ['project-changed'],
   
-  setup(props, { emit }) {
-    const projectStore = useProjectStore()
-    
-    const showSaveAsDialog = ref(false)
-    const isSavingAs = ref(false)
-    const saveAsFormRef = ref(null)
-    
-    const saveAsForm = ref({
-      name: ''
-    })
-    
-    const saveAsRules = {
-      name: [
-        { required: true, message: '请输入工程名称', trigger: 'blur' },
-        { min: 1, max: 50, message: '工程名称长度在 1 到 50 个字符', trigger: 'blur' }
-      ]
-    }
-    
-    const currentProject = computed(() => projectStore.currentProject)
-    const projectList = computed(() => projectStore.projectList)
-    const isLoading = computed(() => projectStore.isLoading)
-    
+  data() {
     return {
-      projectStore,
-      showSaveAsDialog,
-      isSavingAs,
-      saveAsFormRef,
-      saveAsForm,
-      saveAsRules,
-      currentProject,
-      projectList,
-      isLoading,
-      emit
+      projectStore: null,
+      showSaveAsDialog: false,
+      isSavingAs: false,
+      saveAsFormRef: null,
+      saveAsForm: {
+        name: ''
+      },
+      saveAsRules: {
+        name: [
+          { required: true, message: '请输入工程名称', trigger: 'blur' },
+          { min: 1, max: 50, message: '工程名称长度在 1 到 50 个字符', trigger: 'blur' }
+        ]
+      }
+    }
+  },
+  
+  computed: {
+    currentProject() {
+      return this.projectStore?.currentProject
+    },
+    
+    projectList() {
+      return this.projectStore?.projectList || []
+    },
+    
+    isLoading() {
+      return this.projectStore?.isLoading || false
     }
   },
   
   async mounted() {
+    this.projectStore = useProjectStore()
     await this.loadProjects()
   },
   
@@ -214,17 +210,14 @@ export default defineComponent({
     
     // 处理删除工程
     async handleDeleteProject(project) {
-      if (!project?.name) {
-        ElMessage.error('无效的工程信息')
-        return
-      }
+      if (!project?.name) return
       
       try {
         await ElMessageBox.confirm(
-          `确定要删除工程 "${project.name}" 吗？此操作不可恢复。`,
+          `确定要删除工程 "${project.name}" 吗？此操作不可撤销。`,
           '确认删除',
           {
-            confirmButtonText: '删除',
+            confirmButtonText: '确定删除',
             cancelButtonText: '取消',
             type: 'warning',
             confirmButtonClass: 'el-button--danger'
@@ -234,8 +227,9 @@ export default defineComponent({
         await this.projectStore.deleteProject(project.name)
         ElMessage.success(`工程 "${project.name}" 已删除`)
         
-        // 如果删除的是当前工程，通知父组件
+        // 如果删除的是当前工程，清空当前工程
         if (this.isCurrentProject(project)) {
+          this.projectStore.clearCurrentProject()
           this.$emit('project-changed', null)
         }
       } catch (error) {
@@ -246,10 +240,10 @@ export default defineComponent({
       }
     },
     
-    // 处理另存为
-    handleSaveAs() {
+    // 处理另存为工程
+    async handleSaveAs() {
       if (!this.currentProject) {
-        ElMessage.warning('没有当前工程可另存为')
+        ElMessage.warning('请先加载一个工程')
         return
       }
       
@@ -260,32 +254,74 @@ export default defineComponent({
     // 确认另存为
     async confirmSaveAs() {
       try {
-        const valid = await this.$refs.saveAsFormRef.validate()
-        if (!valid) return
+        // 确保表单ref已可用
+        await this.$nextTick()
+        const formRef = this.$refs && this.$refs.saveAsFormRef
+        if (formRef && formRef.validate) {
+          await formRef.validate()
+        }
         
         this.isSavingAs = true
+        await this.projectStore.saveAsProject(this.saveAsForm.name)
         
-        const newProject = await this.projectStore.saveAsProject(this.saveAsForm.name)
-        
-        ElMessage.success(`工程已另存为: ${newProject.name}`)
+        ElMessage.success(`工程已另存为: ${this.saveAsForm.name}`)
         this.showSaveAsDialog = false
-        this.$emit('project-changed', newProject)
+        this.saveAsForm.name = ''
         
+        // 刷新工程列表
+        await this.loadProjects()
+
+        // 通知父组件当前工程已变更，触发上层加载树与同步消息
+        if (this.projectStore?.currentProject) {
+          this.$emit('project-changed', this.projectStore.currentProject)
+        }
       } catch (error) {
-        console.error('另存为失败:', error)
-        ElMessage.error(error.message || '另存为失败')
+        if (error !== 'cancel') {
+          console.error('另存为工程失败:', error)
+          ElMessage.error('另存为工程失败')
+        }
       } finally {
         this.isSavingAs = false
       }
     },
     
+    // 取消另存为
+    cancelSaveAs() {
+      this.showSaveAsDialog = false
+      this.saveAsForm.name = ''
+    },
+    
     // 格式化时间
-    formatTime(time) {
-      if (!time) return ''
-      return dayjs(time).format('MM-DD HH:mm')
+    formatTime(timeStr) {
+      if (!timeStr) return ''
+      return dayjs(timeStr).format('YYYY-MM-DD HH:mm')
+    },
+    
+    // 获取工程操作菜单
+    getProjectActions(project) {
+      const actions = []
+      
+      // 加载操作
+      if (!this.isCurrentProject(project)) {
+        actions.push({
+          label: '加载',
+          icon: 'el-icon-folder-opened',
+          action: () => this.handleLoadProject(project)
+        })
+      }
+      
+      // 删除操作
+      actions.push({
+        label: '删除',
+        icon: 'el-icon-delete',
+        action: () => this.handleDeleteProject(project),
+        danger: true
+      })
+      
+      return actions
     }
   }
-})
+}
 </script>
 
 <style scoped>

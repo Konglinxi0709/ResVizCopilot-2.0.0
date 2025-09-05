@@ -1,7 +1,7 @@
 {
   "project_name": "测试1",
   "created_at": "2025-08-29T12:29:39.253808",
-  "updated_at": "2025-09-01T13:23:46.692613",
+  "updated_at": "2025-09-05T07:47:18.956868",
   "messages": {
     "81f3bc70-3a18-42f3-ac9f-239d3af18575": {
       "id": "81f3bc70-3a18-42f3-ac9f-239d3af18575",
@@ -2524,6 +2524,51 @@
       "visible_node_ids": [],
       "created_at": "2025-08-29T13:04:23.560342",
       "updated_at": "2025-08-29T13:04:23.560822"
+    },
+    "5cc2bfce-d6d5-4716-80b0-cdc0e28eb742": {
+      "id": "5cc2bfce-d6d5-4716-80b0-cdc0e28eb742",
+      "role": "assistant",
+      "publisher": null,
+      "status": "completed",
+      "title": "错误通知",
+      "thinking": "",
+      "content": "发生不可重试错误：DeepSeek API错误: 处理流式响应失败: 消息不存在: 52c434db-7a70-427c-94d3-f67247196dcc\n",
+      "action_title": "",
+      "action_params": {},
+      "snapshot_id": "",
+      "visible_node_ids": [],
+      "created_at": "2025-09-05T07:47:17.929874",
+      "updated_at": "2025-09-05T07:47:17.929882"
+    },
+    "99110326-8937-4255-980b-c046315794b9": {
+      "id": "99110326-8937-4255-980b-c046315794b9",
+      "role": "assistant",
+      "publisher": null,
+      "status": "completed",
+      "title": "处理失败",
+      "thinking": "",
+      "content": "错误: 创建解决方案失败: DeepSeek API错误: 处理流式响应失败: 消息不存在: 52c434db-7a70-427c-94d3-f67247196dcc",
+      "action_title": "",
+      "action_params": {},
+      "snapshot_id": "",
+      "visible_node_ids": [],
+      "created_at": "2025-09-05T07:47:17.930454",
+      "updated_at": "2025-09-05T07:47:17.930459"
+    },
+    "a069d1fb-e070-42f9-86ef-a8c1c4b39187": {
+      "id": "a069d1fb-e070-42f9-86ef-a8c1c4b39187",
+      "role": "assistant",
+      "publisher": null,
+      "status": "completed",
+      "title": "处理失败",
+      "thinking": "",
+      "content": "错误: 处理失败: DeepSeek API错误: 处理流式响应失败: 消息不存在: 52c434db-7a70-427c-94d3-f67247196dcc",
+      "action_title": "",
+      "action_params": {},
+      "snapshot_id": "",
+      "visible_node_ids": [],
+      "created_at": "2025-09-05T07:47:17.930632",
+      "updated_at": "2025-09-05T07:47:17.930636"
     }
   },
   "message_order": [
@@ -2548,7 +2593,10 @@
     "df58c083-abeb-43a1-a7f6-7ef572b784e8",
     "9e48aaff-8e6d-4aa6-9bf3-64bfe4a94a92",
     "f7ea9f5c-7ef1-4774-9ee5-f92822c9c18d",
-    "dad47ffd-8136-41ef-a23f-ecf9fc04a1dd"
+    "dad47ffd-8136-41ef-a23f-ecf9fc04a1dd",
+    "5cc2bfce-d6d5-4716-80b0-cdc0e28eb742",
+    "99110326-8937-4255-980b-c046315794b9",
+    "a069d1fb-e070-42f9-86ef-a8c1c4b39187"
   ],
   "snapshot_map": {
     "d31767d7-096d-4c5b-9724-04528edfc203": {

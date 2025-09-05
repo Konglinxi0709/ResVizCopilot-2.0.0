@@ -68,7 +68,6 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { 
   ChatDotRound, ArrowDown, Loading, VideoPause 
@@ -76,9 +75,8 @@ import {
 import { useMessageStore } from '@/stores/messageStore'
 import { useTreeStore } from '@/stores/treeStore'
 import MessageItem from './MessageItem.vue'
-// import { RecycleScroller } from 'vue-virtual-scroller' // 可选的虚拟滚动
 
-export default defineComponent({
+export default {
   name: 'MessageList',
   
   components: {
@@ -115,98 +113,140 @@ export default defineComponent({
   
   emits: ['view-snapshot'],
   
-  setup(props, { emit }) {
-    const messageStore = useMessageStore()
-    const treeStore = useTreeStore()
+  data() {
+    return {
+      messageStore: null,
+      treeStore: null,
+      messageContainer: null,
+      showScrollToBottom: false,
+      unreadCount: 0,
+      stoppingGeneration: false,
+      lastScrollTop: 0,
+      userScrolledUp: false
+    }
+  },
+  
+  computed: {
+    messages() {
+      return this.messageStore?.messages || []
+    },
     
-    // 响应式引用
-    const messageContainer = ref(null)
-    const showScrollToBottom = ref(false)
-    const unreadCount = ref(0)
-    const stoppingGeneration = ref(false)
-    const lastScrollTop = ref(0)
-    const userScrolledUp = ref(false)
+    isLoading() {
+      return this.messageStore?.isLoading || false
+    },
     
-    // 计算属性
-    const messages = computed(() => messageStore.messages)
-    const isLoading = computed(() => messageStore.isLoading)
-    const isGenerating = computed(() => messageStore.isGenerating)
-    const currentAgentName = computed(() => messageStore.currentAgentName)
+    isGenerating() {
+      return this.messageStore?.isGenerating || false
+    },
     
-    // 滚动处理
-    const handleScroll = () => {
-      if (!messageContainer.value) return
-      
-      const { scrollTop, scrollHeight, clientHeight } = messageContainer.value
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50
-      
-      // 更新滚动状态
-      showScrollToBottom.value = !isAtBottom
-      userScrolledUp.value = scrollTop < lastScrollTop.value
-      lastScrollTop.value = scrollTop
-      
-      // 如果滚动到底部，清除未读计数
-      if (isAtBottom) {
-        unreadCount.value = 0
+    currentAgentName() {
+      return this.messageStore?.currentAgentName || ''
+    },
+    
+    // 用于监听正在生成的消息内容变化
+    generatingContentKey() {
+      const generatingMessage = this.messageStore?.getIncompleteMessage
+      return generatingMessage ? (generatingMessage.content + generatingMessage.thinking) : ''
+    }
+  },
+  
+  watch: {
+    // 监听消息变化，自动滚动/未读计数
+    messages(newArr, oldArr) {
+      const newLength = (newArr || []).length
+      const oldLength = (oldArr || []).length
+      if (newLength > oldLength) {
+        if (this.autoScrollToBottom && !this.userScrolledUp) {
+          this.$nextTick(() => {
+            this.scrollToBottom()
+          })
+        } else if (this.userScrolledUp) {
+          this.unreadCount += (newLength - oldLength)
+        }
+      }
+    },
+    
+    // 监听生成中的内容变化，尽量保持滚动到底部
+    generatingContentKey() {
+      if (this.autoScrollToBottom && !this.userScrolledUp) {
+        this.$nextTick(() => {
+          requestAnimationFrame(() => {
+            if (this.messageContainer) {
+              this.messageContainer.scrollTop = this.messageContainer.scrollHeight
+            }
+          })
+        })
       }
     }
+  },
+  
+  async mounted() {
+    this.messageStore = useMessageStore()
+    this.treeStore = useTreeStore()
     
-    // 滚动到底部
-    const scrollToBottom = async () => {
-      await nextTick()
-      if (messageContainer.value) {
-        messageContainer.value.scrollTo({
-          top: messageContainer.value.scrollHeight,
+    // 初始滚动到底部
+    await this.$nextTick()
+    this.scrollToBottom()
+    
+    // 绑定快捷键
+    document.addEventListener('keydown', this.handleKeydown)
+  },
+  
+  beforeUnmount() {
+    document.removeEventListener('keydown', this.handleKeydown)
+  },
+  
+  methods: {
+    handleScroll() {
+      if (!this.messageContainer) return
+      const { scrollTop, scrollHeight, clientHeight } = this.messageContainer
+      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50
+      this.showScrollToBottom = !isAtBottom
+      this.userScrolledUp = scrollTop < this.lastScrollTop
+      this.lastScrollTop = scrollTop
+      if (isAtBottom) {
+        this.unreadCount = 0
+      }
+    },
+    
+    async scrollToBottom() {
+      await this.$nextTick()
+      if (this.messageContainer) {
+        this.messageContainer.scrollTo({
+          top: this.messageContainer.scrollHeight,
           behavior: 'smooth'
         })
       }
-      unreadCount.value = 0
-    }
+      this.unreadCount = 0
+    },
     
-    // 查看快照
-    const handleViewSnapshot = async (snapshotId) => {
+    async handleViewSnapshot(snapshotId) {
       try {
-        console.log('查看快照:', snapshotId)
-        
-        // 通过treeStore查看快照
-        await treeStore.viewSnapshot(snapshotId)
-        
-        // 通知父组件
-        emit('view-snapshot', snapshotId)
-        
+        await this.treeStore.viewSnapshot(snapshotId)
+        this.$emit('view-snapshot', snapshotId)
         ElMessage.success('快照加载成功')
       } catch (error) {
         console.error('查看快照失败:', error)
         ElMessage.error('查看快照失败')
       }
-    }
+    },
     
-    // 回溯消息
-    const handleRollback = async (messageId) => {
+    async handleRollback(messageId) {
       try {
-        console.log('回溯到消息:', messageId)
-        
-        await messageStore.rollbackToMessage(messageId)
-        
+        await this.messageStore.rollbackToMessage(messageId)
         ElMessage.success('回溯操作成功')
-        
-        // 滚动到回溯点
-        await nextTick()
-        scrollToBottom()
-        
+        await this.$nextTick()
+        this.scrollToBottom()
       } catch (error) {
         console.error('回溯失败:', error)
         ElMessage.error('回溯操作失败')
       }
-    }
+    },
     
-    // 停止生成
-    const handleStopGeneration = async () => {
+    async handleStopGeneration() {
       try {
-        stoppingGeneration.value = true
-        
-        const success = await messageStore.sendInterruptRequest()
-        
+        this.stoppingGeneration = true
+        const success = await this.messageStore.sendInterruptRequest()
         if (success) {
           ElMessage.success('已停止生成')
         } else {
@@ -216,95 +256,23 @@ export default defineComponent({
         console.error('停止生成失败:', error)
         ElMessage.error('停止生成失败')
       } finally {
-        stoppingGeneration.value = false
+        this.stoppingGeneration = false
       }
-    }
+    },
     
-    // 监听消息变化，自动滚动到底部
-    watch(
-      () => messages.value.length,
-      async (newLength, oldLength) => {
-        if (newLength > oldLength) {
-          // 有新消息
-          if (props.autoScrollToBottom && !userScrolledUp.value) {
-            await nextTick()
-            scrollToBottom()
-          } else if (userScrolledUp.value) {
-            // 用户向上滚动了，增加未读计数
-            unreadCount.value += (newLength - oldLength)
-          }
-        }
-      }
-    )
-    
-    // 监听正在生成的消息内容变化，自动滚动
-    watch(
-      () => {
-        const generatingMessage = messageStore.getIncompleteMessage
-        return generatingMessage ? generatingMessage.content + generatingMessage.thinking : ''
-      },
-      async () => {
-        if (props.autoScrollToBottom && !userScrolledUp.value) {
-          await nextTick()
-          // 使用requestAnimationFrame确保DOM更新后再滚动
-          requestAnimationFrame(() => {
-            if (messageContainer.value) {
-              messageContainer.value.scrollTop = messageContainer.value.scrollHeight
-            }
-          })
-        }
-      }
-    )
-    
-    // 组件挂载时滚动到底部
-    onMounted(async () => {
-      await nextTick()
-      scrollToBottom()
-    })
-    
-    // 键盘快捷键
-    const handleKeydown = (event) => {
+    handleKeydown(event) {
       if (event.key === 'End' && event.ctrlKey) {
-        // Ctrl+End 滚动到底部
-        scrollToBottom()
+        this.scrollToBottom()
         event.preventDefault()
       } else if (event.key === 'Home' && event.ctrlKey) {
-        // Ctrl+Home 滚动到顶部
-        if (messageContainer.value) {
-          messageContainer.value.scrollTo({
-            top: 0,
-            behavior: 'smooth'
-          })
+        if (this.messageContainer) {
+          this.messageContainer.scrollTo({ top: 0, behavior: 'smooth' })
         }
         event.preventDefault()
       }
     }
-    
-    onMounted(() => {
-      document.addEventListener('keydown', handleKeydown)
-    })
-    
-    onBeforeUnmount(() => {
-      document.removeEventListener('keydown', handleKeydown)
-    })
-    
-    return {
-      messageContainer,
-      messages,
-      isLoading,
-      isGenerating,
-      currentAgentName,
-      showScrollToBottom,
-      unreadCount,
-      stoppingGeneration,
-      handleScroll,
-      scrollToBottom,
-      handleViewSnapshot,
-      handleRollback,
-      handleStopGeneration
-    }
   }
-})
+}
 </script>
 
 <style scoped>

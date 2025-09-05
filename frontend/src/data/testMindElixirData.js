@@ -5,8 +5,6 @@
  * 采用现代化配色方案和简洁的视觉风格
  */
 
-import { ResearchTreeTransformer } from '@/services/ResearchTreeTransformer.js'
-
 // 后端数据格式的测试数据
 export const mockBackendSnapshotData = {
   id: 'snapshot-2024-01-01-001',
@@ -139,29 +137,46 @@ export const mockBackendSnapshotData = {
   ]
 }
 
-// 使用转换器生成的现代化Mind-elixir数据
-const transformer = new ResearchTreeTransformer()
+// 简化的测试数据，避免在导入时就执行转换器
+export const simpleTestData = {
+  nodeData: {
+    id: 'mind-root',  // 改为mind-root，与后端数据保持一致
+    topic: '测试研究树',
+    root: true,       // 关键：标记为根节点
+    style: {
+      background: '#f9fafb',
+      color: '#1f2937',
+      borderColor: '#d1d5db',
+      fontSize: '16px',
+      fontWeight: '600',
+      borderRadius: '12px',
+      padding: '16px 20px'
+    },
+    children: [
+      {
+        id: 'test-problem-1',
+        topic: '测试问题1',
+        children: [
+          {
+            id: 'test-solution-1',
+            topic: '测试解决方案1',
+            children: []
+          }
+        ]
+      }
+    ]
+  },
+  theme: {
+    name: 'Test',
+    palette: ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#909399'],
+    cssVar: {
+      '--main-color': '#1f2937',
+      '--main-bgcolor': '#ffffff',
+      '--color': '#4b5563',
+      '--bgcolor': '#f9fafb'
+    }
+  }
+}
 
-export const testMindElixirData = transformer.transformToMindElixir(mockBackendSnapshotData, {
-  selectedSolutionIds: transformer.extractSelectedSolutionIds(mockBackendSnapshotData)
-})
-
-/**
- * 快照查看模式的测试数据
- */
-export const testSnapshotMindElixirData = transformer.transformToMindElixir(mockBackendSnapshotData, {
-  isSnapshotView: true,
-  selectedSolutionIds: transformer.extractSelectedSolutionIds(mockBackendSnapshotData)
-})
-
-/**
- * 智能体操作中的测试数据
- */
-export const testAgentOperatingData = transformer.transformToMindElixir(mockBackendSnapshotData, {
-  agentOperatingNodeId: '1a2b3c4d-5e6f-7890-abcd-ef1234567890',
-  selectedSolutionIds: transformer.extractSelectedSolutionIds(mockBackendSnapshotData)
-})
-
-// 简化的测试数据导出（向后兼容）
-export { testMindElixirData as simpleMindElixirData }
-export { testSnapshotMindElixirData as styledMindElixirData }
+// 导出原始数据，让组件根据需要动态转换
+export { mockBackendSnapshotData as backendData }
