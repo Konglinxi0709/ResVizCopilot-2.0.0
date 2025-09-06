@@ -151,12 +151,11 @@
 
 <script>
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
+import {
   More,
   ArrowDown, ArrowUp,
   View
 } from '@element-plus/icons-vue'
-import { useTreeStore } from '@/stores/treeStore'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 import dayjs from 'dayjs'
 
@@ -181,7 +180,6 @@ export default {
   
   data() {
     return {
-      treeStore: null,
       titleCollapsed: true, // 标题默认折叠（整体关闭）
       contentCollapsed: false,
       thinkingCollapsed: true // 思考过程默认折叠
@@ -194,44 +192,8 @@ export default {
     },
     
     senderName() {
-      const message = this.message
-      
-      if (message.role === 'user') {
-        return '用户'
-      } else if (message.role === 'system') {
-        return '系统'
-      } else if (message.role === 'assistant') {
-        // 根据publisher获取发送者信息
-        const publisherId = message.publisher
-        if (!publisherId) {
-          return '智能体'
-        }
-        
-        // 从研究树获取节点信息
-        const currentSnapshot = this.treeStore?.currentSnapshot
-        if (!currentSnapshot) {
-          return '智能体'
-        }
-        
-        const publisherNode = this.findNodeById(currentSnapshot.roots || [], publisherId)
-        if (!publisherNode) {
-          return '智能体'
-        }
-        
-        if (publisherNode.type === 'solution') {
-          // 获取父问题节点
-          const parentProblem = this.findParentNode(currentSnapshot.roots || [], publisherId)
-          if (parentProblem) {
-            return `「${parentProblem.title}」问题的负责专家`
-          }
-        } else if (publisherNode.type === 'problem') {
-          return `「${publisherNode.title}」问题的负责专家`
-        }
-        
-        return '智能体'
-      }
-      
-      return '未知'
+      // 直接使用消息对象的agentName属性
+      return this.message.agentName || '未知'
     },
     
     // 消息类型样式
@@ -271,40 +233,7 @@ export default {
     }
   },
   
-  mounted() {
-    this.treeStore = useTreeStore()
-  },
-  
   methods: {
-    // 辅助函数：根据ID查找节点
-    findNodeById(nodes, nodeId) {
-      for (const node of nodes) {
-        if (node.id === nodeId) {
-          return node
-        }
-        if (node.children) {
-          const found = this.findNodeById(node.children, nodeId)
-          if (found) return found
-        }
-      }
-      return null
-    },
-    
-    // 辅助函数：查找父节点
-    findParentNode(nodes, nodeId, parent = null) {
-      for (const node of nodes) {
-        if (node.children) {
-          for (const child of node.children) {
-            if (child.id === nodeId) {
-              return parent || node
-            }
-          }
-          const found = this.findParentNode(node.children, nodeId, node)
-          if (found) return found
-        }
-      }
-      return null
-    },
     
     // 切换标题折叠状态
     toggleTitleCollapse() {

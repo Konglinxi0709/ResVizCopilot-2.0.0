@@ -364,6 +364,11 @@ class DatabaseManager:
         return {"error": "Snapshot not found"}
 
     @query_decorator
+    def get_current_snapshot_id_query(self) -> Dict:
+        """获取当前快照ID查询"""
+        return {"current_snapshot_id": self.current_snapshot_id}
+
+    @query_decorator
     def get_compact_text_tree_query(self) -> Dict:
         """返回仅包含标题与状态的树状文本查询"""
         current = self.get_current_snapshot()

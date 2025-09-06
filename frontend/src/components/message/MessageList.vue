@@ -68,12 +68,9 @@
 </template>
 
 <script>
-import { ElMessage } from 'element-plus'
-import { 
-  ChatDotRound, ArrowDown, Loading, VideoPause 
+import {
+  ChatDotRound, ArrowDown, Loading, VideoPause
 } from '@element-plus/icons-vue'
-import { useMessageStore } from '@/stores/messageStore'
-import { useTreeStore } from '@/stores/treeStore'
 import MessageItem from './MessageItem.vue'
 
 export default {
@@ -86,24 +83,48 @@ export default {
   },
   
   props: {
+    // 消息列表数据
+    messages: {
+      type: Array,
+      default: () => []
+    },
+
+    // 加载状态
+    isLoading: {
+      type: Boolean,
+      default: false
+    },
+
+    // 生成状态
+    isGenerating: {
+      type: Boolean,
+      default: false
+    },
+
+    // 当前智能体名称
+    currentAgentName: {
+      type: String,
+      default: ''
+    },
+
     // 是否启用虚拟滚动
     enableVirtualScroll: {
       type: Boolean,
       default: false
     },
-    
+
     // 虚拟滚动阈值
     virtualScrollThreshold: {
       type: Number,
       default: 50
     },
-    
+
     // 预估项目高度
     estimatedItemSize: {
       type: Number,
       default: 200
     },
-    
+
     // 是否自动滚动到底部
     autoScrollToBottom: {
       type: Boolean,
@@ -111,42 +132,16 @@ export default {
     }
   },
   
-  emits: ['view-snapshot'],
+  emits: ['view-snapshot', 'rollback', 'stop-generation'],
   
   data() {
     return {
-      messageStore: null,
-      treeStore: null,
       messageContainer: null,
       showScrollToBottom: false,
       unreadCount: 0,
       stoppingGeneration: false,
       lastScrollTop: 0,
       userScrolledUp: false
-    }
-  },
-  
-  computed: {
-    messages() {
-      return this.messageStore?.messages || []
-    },
-    
-    isLoading() {
-      return this.messageStore?.isLoading || false
-    },
-    
-    isGenerating() {
-      return this.messageStore?.isGenerating || false
-    },
-    
-    currentAgentName() {
-      return this.messageStore?.currentAgentName || ''
-    },
-    
-    // 用于监听正在生成的消息内容变化
-    generatingContentKey() {
-      const generatingMessage = this.messageStore?.getIncompleteMessage
-      return generatingMessage ? (generatingMessage.content + generatingMessage.thinking) : ''
     }
   },
   
@@ -165,25 +160,21 @@ export default {
         }
       }
     },
-    
-    // 监听生成中的内容变化，尽量保持滚动到底部
-    generatingContentKey() {
-      if (this.autoScrollToBottom && !this.userScrolledUp) {
-        this.$nextTick(() => {
-          requestAnimationFrame(() => {
-            if (this.messageContainer) {
-              this.messageContainer.scrollTop = this.messageContainer.scrollHeight
-            }
+
+    // 监听生成状态变化
+    isGenerating(newVal) {
+      if (!newVal) {
+        // 生成结束时，自动滚动到底部
+        if (this.autoScrollToBottom) {
+          this.$nextTick(() => {
+            this.scrollToBottom()
           })
-        })
+        }
       }
     }
   },
   
   async mounted() {
-    this.messageStore = useMessageStore()
-    this.treeStore = useTreeStore()
-    
     // 初始滚动到底部
     await this.$nextTick()
     this.scrollToBottom()
@@ -221,40 +212,17 @@ export default {
     },
     
     async handleViewSnapshot(snapshotId) {
-      try {
-        await this.treeStore.viewSnapshot(snapshotId)
-        this.$emit('view-snapshot', snapshotId)
-        ElMessage.success('快照加载成功')
-      } catch (error) {
-        console.error('查看快照失败:', error)
-        ElMessage.error('查看快照失败')
-      }
+      this.$emit('view-snapshot', snapshotId)
     },
-    
+
     async handleRollback(messageId) {
-      try {
-        await this.messageStore.rollbackToMessage(messageId)
-        ElMessage.success('回溯操作成功')
-        await this.$nextTick()
-        this.scrollToBottom()
-      } catch (error) {
-        console.error('回溯失败:', error)
-        ElMessage.error('回溯操作失败')
-      }
+      this.$emit('rollback', messageId)
     },
-    
+
     async handleStopGeneration() {
       try {
         this.stoppingGeneration = true
-        const success = await this.messageStore.sendInterruptRequest()
-        if (success) {
-          ElMessage.success('已停止生成')
-        } else {
-          ElMessage.error('停止生成失败')
-        }
-      } catch (error) {
-        console.error('停止生成失败:', error)
-        ElMessage.error('停止生成失败')
+        this.$emit('stop-generation')
       } finally {
         this.stoppingGeneration = false
       }

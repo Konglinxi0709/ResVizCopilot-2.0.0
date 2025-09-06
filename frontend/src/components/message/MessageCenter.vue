@@ -19,17 +19,17 @@
       </el-select>
       
       <el-select
-        v-model="selectedNode"
+        v-model="selectedNodeTitle"
         placeholder="选择节点"
         :disabled="isGenerating || !selectedAgent"
         style="width: 100%;"
         @change="handleNodeChange"
       >
         <el-option
-          v-for="node in filteredNodes"
-          :key="node.id"
-          :label="node.title"
-          :value="node.id"
+          v-for="title in filteredTitles"
+          :key="title"
+          :label="title"
+          :value="title"
         />
       </el-select>
     </div>
@@ -37,8 +37,13 @@
     <!-- 消息列表区域 -->
     <div class="message-list-area">
       <MessageList
-        :enable-virtual-scroll="enableVirtualScroll"
+        :messages="getMessageList"
+        :is-loading="isLoading"
+        :is-generating="isGenerating"
+        :current-agent-name="getCurrentAgentName"
         @view-snapshot="handleViewSnapshot"
+        @rollback="handleRollback"
+        @stop-generation="handleStopGeneration"
       />
     </div>
     
@@ -46,13 +51,9 @@
     <div class="input-area">
       <ChatInput
         v-model="inputContent"
-        :title="inputTitle"
-        :agent-type="selectedAgent"
-        :selected-node="selectedNodeInfo"
         :disabled="isGenerating"
         :is-loading="isGenerating"
         @send="handleSendMessage"
-        @title-change="handleTitleChange"
       />
     </div>
     
@@ -86,15 +87,7 @@ export default {
     ChatInput
   },
   
-  props: {
-    // 是否启用虚拟滚动
-    enableVirtualScroll: {
-      type: Boolean,
-      default: false
-    }
-  },
-  
-  emits: ['view-snapshot'],
+  emits: [],
   
   data() {
     return {
@@ -102,114 +95,83 @@ export default {
       treeStore: null,
       projectStore: null,
       selectedAgent: '',
-      selectedNode: '',
-      selectedNodeInfo: null,
-      selectedAgentInfo: null,
-      inputContent: '',
-      inputTitle: ''
+      selectedNodeTitle: '',
+      inputContent: ''
     }
   },
   
   computed: {
     messageCount() {
-      return this.messageStore?.messageCount || 0
+      return this.messageStore?.getMessageCount || 0
     },
-    
+
     isLoading() {
-      return this.messageStore?.isLoading || false
+      return this.messageStore?.getIsLoading || false
     },
-    
+
     isGenerating() {
-      return this.messageStore?.isGenerating || false
+      return this.messageStore?.getIsGenerating || false
     },
-    
+
     error() {
-      return this.messageStore?.error
+      return this.messageStore?.getError
     },
-    
+
     currentSnapshot() {
-      return this.treeStore?.currentSnapshot
+      return this.treeStore?.getCurrentSnapshot
+    },
+
+    getMessageList() {
+      return this.messageStore?.getMessageList || []
+    },
+
+    getCurrentAgentName() {
+      return this.treeStore?.getCurrentAgentName
     },
     
     // 可用智能体列表
     availableAgents() {
       return [
-        { value: 'auto_research_agent', label: '自动研究智能体' },
-        { value: 'user_chat_agent', label: '用户对话智能体' }
+        { value: 'auto_research_agent', label: '自动研究智能体', messageTitle: '启动自动研究' },
+        { value: 'user_chat_agent', label: '用户对话智能体', messageTitle: '用户消息' }
       ]
     },
     
-    // 可用节点列表
-    availableNodes() {
-      const snapshot = this.currentSnapshot
-      if (!snapshot || !snapshot.roots) {
-        return []
-      }
-      
-      // 递归收集所有节点
-      const collectNodes = (nodes, parentPath = []) => {
-        const result = []
-        
-        for (const node of nodes) {
-          const nodeWithPath = {
-            ...node,
-            path: [...parentPath, node.title]
-          }
-          result.push(nodeWithPath)
-          
-          if (node.children && node.children.length > 0) {
-            result.push(...collectNodes(node.children, nodeWithPath.path))
-          }
-        }
-        
-        return result
-      }
-      
-      return collectNodes(snapshot.roots)
-    },
-    
-    // 根据智能体类型过滤节点
-    filteredNodes() {
+    // 根据智能体类型过滤标题
+    filteredTitles() {
       if (!this.selectedAgent) return []
-      
-      const nodes = this.availableNodes
-      
+
       if (this.selectedAgent === 'auto_research_agent') {
-        // 只显示实施问题节点
-        return nodes.filter(node => 
-          node.type === 'problem' && node.problem_type === 'implementation'
-        )
+        // 从treeStore获取实施问题标题列表
+        return this.treeStore?.getAllImplementaionProblemTitles || []
       } else if (this.selectedAgent === 'user_chat_agent') {
-        // 只显示解决方案节点
-        return nodes.filter(node => node.type === 'solution')
+        // 从treeStore获取解决方案标题列表
+        return this.treeStore?.getAllSolutionTitles || []
       }
-      
+
       return []
     },
     
     // 检查是否可以发送消息
     canSendMessage() {
-      return this.selectedAgent && 
-             this.selectedNode && 
-             this.inputContent.trim() && 
+      return this.selectedAgent &&
+             this.selectedNodeTitle &&
+             this.inputContent.trim() &&
              !this.isGenerating
     }
   },
   
   watch: {
     // 监听项目变更
-    'projectStore.currentProject': {
+    'projectStore.getCurrentProject': {
       async handler(newProject) {
         if (newProject) {
-          // 清空消息列表
-          this.messageStore.clearMessages()
+          // 刷新消息数据
+          await this.messageStore.refreshMessages()
           // 重置选择
           this.selectedAgent = ''
-          this.selectedNode = ''
-          this.selectedNodeInfo = null
-          this.selectedAgentInfo = null
+          this.selectedNodeTitle = ''
           this.inputContent = ''
-          this.inputTitle = ''
         }
       },
       immediate: false
@@ -220,44 +182,25 @@ export default {
     this.messageStore = useMessageStore()
     this.treeStore = useTreeStore()
     this.projectStore = useProjectStore()
-    
-    // 初始化消息列表：每次挂载（v-if展开）都强制从后端同步
-    await this.messageStore.syncMessagesFromBackend()
+    await this.messageStore.refreshMessages()
+
+    // 初始化消息列表：getters会自动触发同步
   },
   
   methods: {
     // 处理智能体选择
     handleAgentChange(agentName) {
       this.selectedAgent = agentName
-      this.selectedNode = ''
-      this.selectedNodeInfo = null
-      this.selectedAgentInfo = null
-      
-      // 更新智能体信息
-      this.selectedAgentInfo = this.availableAgents.find(
-        agent => agent.value === agentName
-      )
+      this.selectedNodeTitle = ''
+      this.inputContent = ''
     },
-    
+
     // 处理节点选择
-    handleNodeChange(nodeId) {
-      this.selectedNode = nodeId
-      
-      // 更新节点信息
-      this.selectedNodeInfo = this.filteredNodes.find(
-        node => node.id === nodeId
-      )
+    handleNodeChange(title) {
+      // 直接存储节点标题
+      this.selectedNodeTitle = title
     },
     
-    // 处理输入内容变更
-    handleContentChange(content) {
-      this.inputContent = content
-    },
-    
-    // 处理标题变更
-    handleTitleChange(title) {
-      this.inputTitle = title
-    },
     
     // 发送消息
     async handleSendMessage() {
@@ -265,25 +208,32 @@ export default {
         ElMessage.warning('请完善消息内容')
         return
       }
-      
+
       try {
-        // 直接调用基于CLI语义的sendAgentMessage
+        // 获取智能体对应的消息标题
+        const agentInfo = this.availableAgents.find(agent => agent.value === this.selectedAgent)
+        const messageTitle = agentInfo?.messageTitle || '用户消息'
+
+        // 根据标题获取节点ID
+        const nodeId = this.treeStore?.getNodeIdByTitle(this.selectedNodeTitle)
+
+        // 调用发送消息方法
         const otherParams = this.selectedAgent === 'auto_research_agent'
-          ? { problem_id: this.selectedNode }
+          ? { problem_id: nodeId }
           : this.selectedAgent === 'user_chat_agent'
-            ? { solution_id: this.selectedNode }
+            ? { solution_id: nodeId }
             : {}
-        await this.messageStore.sendAgentMessage(
-          this.selectedAgent,
+
+        await this.messageStore.sendMessage(
           this.inputContent.trim(),
-          this.inputTitle.trim() || '用户消息',
+          messageTitle,
+          this.selectedAgent,
           otherParams
         )
-        
+
         // 清空输入
         this.inputContent = ''
-        this.inputTitle = ''
-        
+
         ElMessage.success('消息发送成功')
       } catch (error) {
         console.error('发送消息失败:', error)
@@ -292,29 +242,41 @@ export default {
     },
     
     // 查看快照
-    handleViewSnapshot(snapshotId) {
-      this.$emit('view-snapshot', snapshotId)
+    async handleViewSnapshot(snapshotId) {
+      try {
+        await this.treeStore.viewSnapshot(snapshotId)
+      } catch (error) {
+        console.error('查看快照失败:', error)
+        ElMessage.error('查看快照失败')
+      }
     },
-    
-    // 停止生成
+
+    // 处理消息回溯
+    async handleRollback(messageId) {
+      try {
+        // 如果当前有消息正在生成，先停止生成
+        if (this.isGenerating) {
+          console.log('⚠️ 检测到正在生成的消息，先停止生成...')
+          await this.handleStopGeneration()
+        }
+
+        await this.messageStore.rollbackToMessage(messageId)
+        await this.treeStore.refreshCurrentSnapshot()
+        ElMessage.success('消息回溯成功')
+      } catch (error) {
+        console.error('消息回溯失败:', error)
+        ElMessage.error('消息回溯失败')
+      }
+    },
+
+    // 处理停止生成
     async handleStopGeneration() {
       try {
-        await this.messageStore.stopGeneration()
+        await this.messageStore.stopMessage()
         ElMessage.success('已停止生成')
       } catch (error) {
         console.error('停止生成失败:', error)
         ElMessage.error('停止生成失败')
-      }
-    },
-    
-    // 清空消息
-    async handleClearMessages() {
-      try {
-        await this.messageStore.clearMessages()
-        ElMessage.success('消息已清空')
-      } catch (error) {
-        console.error('清空消息失败:', error)
-        ElMessage.error('清空消息失败')
       }
     }
   }

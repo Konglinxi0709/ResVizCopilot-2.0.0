@@ -1,68 +1,21 @@
 <template>
   <div class="mind-elixir-wrapper">
     <!-- Mind-elixir 渲染容器 -->
-    <div 
-      ref="mindElixirEl" 
+    <div
+      ref="mindElixirEl"
       class="mind-elixir-canvas"
-      :class="{ 'snapshot-view': isSnapshotView }"
     ></div>
     
-    <!-- 快照查看指示器 -->
-    <div v-if="isSnapshotView" class="snapshot-indicator">
-      <el-card class="snapshot-card" shadow="hover">
-        <div class="snapshot-content">
-          <el-icon class="snapshot-icon"><Camera /></el-icon>
-          <span class="snapshot-text">正在查看历史快照</span>
-          <el-button 
-            size="small" 
-            type="primary" 
-            @click="exitSnapshotView"
-            class="return-btn"
-          >
-            返回当前
-          </el-button>
-        </div>
-      </el-card>
-    </div>
-    
-    <!-- 智能体操作指示器 -->
-    <div v-if="agentOperatingNodeId" class="agent-indicator">
-      <el-card class="agent-card" shadow="hover">
-        <div class="agent-content">
-          <el-icon class="agent-icon rotating"><Loading /></el-icon>
-          <span class="agent-text">智能体正在操作中...</span>
-        </div>
-      </el-card>
-    </div>
-    
-    <!-- 调试信息 -->
-    <div v-if="!hasData" class="debug-info">
-      <div class="debug-overlay">
-        <h3>🐛 Mind-elixir调试信息</h3>
-        <p>hasData: {{ hasData }}</p>
-        <p>mindElixirData: {{ !!mindElixirData }}</p>
-        <p>nodeData: {{ !!mindElixirData?.nodeData }}</p>
-        <p>mind实例: {{ !!mind }}</p>
-        <p>isInitialized: {{ isInitialized }}</p>
-        <div style="margin-top: 10px;">
-          <el-button type="primary" @click="refreshData" size="small">重新加载</el-button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script>
 import MindElixir from 'mind-elixir'
-import { Camera, Loading } from '@element-plus/icons-vue'
 
 export default {
   name: 'MindElixirWrapper',
-  
-  components: {
-    Camera,
-    Loading
-  },
+
+  components: {},
   
   props: {
     // Mind-elixir数据
@@ -70,27 +23,21 @@ export default {
       type: Object,
       default: null
     },
-    
-    // 是否为快照查看模式
-    isSnapshotView: {
-      type: Boolean,
-      default: false
-    },
-    
-    // 智能体正在操作的节点ID
-    agentOperatingNodeId: {
+
+    // 选中的节点ID (v-model)
+    selectedNodeId: {
       type: String,
       default: null
     },
-    
+
     // 自定义配置
     options: {
       type: Object,
       default: () => ({})
     }
   },
-  
-  emits: ['node-selected', 'exit-snapshot-view', 'refresh-data'],
+
+  emits: ['node-selected', 'update:selectedNodeId'],
   
   data() {
     return {
@@ -114,13 +61,6 @@ export default {
       },
       deep: true,
       immediate: false
-    },
-    
-    agentOperatingNodeId() {
-      // 当智能体操作状态变化时，重新渲染以应用特殊样式
-      if (this.mind && this.mindElixirData) {
-        this.updateMindMap(this.mindElixirData)
-      }
     }
   },
   
@@ -351,27 +291,19 @@ export default {
     // 处理节点选择事件
     handleNodeSelect(nodeObj) {
       console.log('🎯 节点被选中:', nodeObj)
-      
+
+      const nodeId = nodeObj.id
+      this.$emit('update:selectedNodeId', nodeId)
+
       const nodeInfo = {
-        id: nodeObj.id,
+        id: nodeId,
         title: nodeObj.topic,
         data: nodeObj
       }
-      
+
       this.$emit('node-selected', nodeInfo)
     },
     
-    // 退出快照查看
-    exitSnapshotView() {
-      console.log('📸 退出快照查看模式')
-      this.$emit('exit-snapshot-view')
-    },
-    
-    // 刷新数据
-    refreshData() {
-      console.log('🔄 请求刷新数据')
-      this.$emit('refresh-data')
-    }
   }
 }
 </script>
@@ -396,122 +328,7 @@ export default {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.mind-elixir-canvas.snapshot-view {
-  filter: brightness(0.9) saturate(0.8);
-}
 
-/* 快照查看指示器 */
-.snapshot-indicator {
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-}
-
-.snapshot-card {
-  border-radius: 8px;
-  border: 1px solid #409eff;
-  background: rgba(64, 158, 255, 0.1);
-  backdrop-filter: blur(4px);
-}
-
-.snapshot-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-}
-
-.snapshot-icon {
-  color: #409eff;
-  font-size: 16px;
-}
-
-.snapshot-text {
-  color: #409eff;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.return-btn {
-  font-size: 12px;
-  height: 28px;
-}
-
-/* 智能体操作指示器 */
-.agent-indicator {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 1000;
-}
-
-.agent-card {
-  border-radius: 8px;
-  border: 1px solid #fa8c16;
-  background: rgba(250, 140, 22, 0.1);
-  backdrop-filter: blur(4px);
-}
-
-.agent-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-}
-
-.agent-icon {
-  color: #fa8c16;
-  font-size: 16px;
-}
-
-.agent-text {
-  color: #fa8c16;
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.rotating {
-  animation: rotate 2s linear infinite;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* 调试信息 */
-.debug-info {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 100;
-}
-
-.debug-overlay {
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid #409eff;
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.debug-overlay h3 {
-  margin-top: 0;
-  color: #409eff;
-}
-
-.debug-overlay p {
-  margin: 8px 0;
-  font-family: monospace;
-}
 
 /* 智能体操作动画效果 */
 :deep(.mind-elixir-canvas .node[data-agent-operating="true"]) {

@@ -1,271 +1,104 @@
 <template>
   <div class="research-tree">
-    <!-- 调试信息面板 -->
-    <div v-if="showDebugInfo" class="debug-panel">
-      <el-card class="debug-card" shadow="hover">
-        <template #header>
-          <div class="debug-header">
-            <span>调试信息</span>
-            <el-button 
-              size="small" 
-              text 
-              @click="showDebugInfo = false"
-            >
-              <el-icon><Close /></el-icon>
-            </el-button>
-          </div>
-        </template>
-        <div class="debug-content">
-          <div class="debug-item">
-            <el-tag v-if="hasData" type="success">有Mind-elixir数据</el-tag>
-            <el-tag v-else type="danger">无Mind-elixir数据</el-tag>
-          </div>
-          <div class="debug-item">
-            <el-tag v-if="isSnapshotView" type="warning">快照查看模式</el-tag>
-            <el-tag v-else type="info">正常模式</el-tag>
-          </div>
-          <div class="debug-item">
-            <el-tag v-if="actualAgentOperatingNodeId" type="info">智能体操作中: {{ actualAgentOperatingNodeId.slice(0,8) }}...</el-tag>
-            <el-tag v-else type="success">智能体空闲</el-tag>
-          </div>
-          <div class="debug-item">
-            <el-tag v-if="selectedNodeId" type="primary">已选中节点: {{ selectedNodeId.slice(0,8) }}...</el-tag>
-            <el-tag v-else>无选中节点</el-tag>
-          </div>
-        </div>
-        <div class="debug-actions">
-          <el-button 
-            size="small" 
-            type="primary"
-            @click="loadBackendData"
-            :loading="isLoadingData"
-          >
-            从后端加载数据
-          </el-button>
-          <el-button size="small" @click="loadTestData">加载测试数据</el-button>
-          <el-button size="small" @click="loadSnapshotData">快照测试</el-button>
-          <el-button size="small" @click="simulateAgentOperation">模拟智能体操作</el-button>
-          <el-button size="small" @click="clearTestData">清除数据</el-button>
-        </div>
-      </el-card>
-    </div>
-    
-    <!-- 调试控制按钮 -->
-    <div class="debug-toggle">
-      <el-button 
-        circle 
-        size="small" 
-        @click="toggleDebugInfo"
-        :type="showDebugInfo ? 'primary' : 'default'"
-      >
-        <el-icon><Setting /></el-icon>
-      </el-button>
-    </div>
-    
+
     <!-- Mind-elixir渲染容器 -->
     <div class="tree-container">
       <MindElixirWrapper
         :mind-elixir-data="currentMindElixirData"
-        :is-snapshot-view="isSnapshotView"
-        :agent-operating-node-id="actualAgentOperatingNodeId"
+        v-model:selected-node-id="localSelectedNodeId"
         @node-selected="handleNodeSelected"
-        @exit-snapshot-view="handleExitSnapshotView"
-        @refresh-data="handleRefreshData"
       />
     </div>
+
+    <!-- 快照查看指示器 -->
+    <div v-if="isSnapshotView" class="snapshot-indicator">
+      <el-card class="snapshot-card" shadow="hover">
+        <div class="snapshot-content">
+          <el-icon class="snapshot-icon"><Camera /></el-icon>
+          <span class="snapshot-text">正在查看历史快照</span>
+          <el-button
+            size="small"
+            type="primary"
+            @click="handleExitSnapshotView"
+            class="return-btn"
+          >
+            返回当前
+          </el-button>
+        </div>
+      </el-card>
+    </div>
+
+    <!-- 智能体操作指示器 -->
+    <div v-if="agentOperatingNodeId" class="agent-indicator">
+      <el-card class="agent-card" shadow="hover">
+        <div class="agent-content">
+          <el-icon class="agent-icon rotating"><Loading /></el-icon>
+          <span class="agent-text">智能体正在操作中...</span>
+        </div>
+      </el-card>
+    </div>
+
   </div>
 </template>
 
 <script>
-import { Close, Setting } from '@element-plus/icons-vue'
 import MindElixirWrapper from './MindElixirWrapper.vue'
-import { 
-  simpleTestData,
-  mockBackendSnapshotData
-} from '@/data/testMindElixirData'
-import { ResearchTreeTransformer } from '@/services/ResearchTreeTransformer'
 import { useTreeStore } from '@/stores/treeStore'
+import { Camera, Loading } from '@element-plus/icons-vue'
 
 export default {
   name: 'ResearchTree',
   
   components: {
-    Close,
-    Setting,
-    MindElixirWrapper
+    MindElixirWrapper,
+    Camera,
+    Loading
   },
   
-  props: {
-    snapshotData: {
-      type: Object,
-      default: null
-    },
-    isSnapshotView: {
-      type: Boolean,
-      default: false
-    },
-    agentOperatingNodeId: {
-      type: String,
-      default: null
-    },
-    selectedNodeId: {
-      type: String,
-      default: null
-    }
-  },
-  
-  emits: ['node-selected', 'exit-snapshot-view'],
   
   data() {
     return {
       treeStore: null,
-      // 调试面板控制
-      showDebugInfo: false, // 默认收起调试面板
-      
-      // 当前使用的Mind-elixir数据
-      currentMindElixirData: null,
-      
-      // 测试用的智能体操作节点ID
-      testAgentNodeId: null,
-      
-      // 数据转换器实例
-      transformer: new ResearchTreeTransformer(),
-      
-      // 是否正在加载数据
-      isLoadingData: false
+      localSelectedNodeId: null
     }
   },
   
   computed: {
-    // 实际使用的智能体操作节点ID
-    actualAgentOperatingNodeId() {
-      return this.agentOperatingNodeId || this.testAgentNodeId
+    // 从treeStore获取数据
+    currentSnapshot() {
+      return this.treeStore?.getCurrentSnapshot
     },
-    
-    // 是否有数据
-    hasData() {
-      return !!this.currentMindElixirData
+
+    isSnapshotView() {
+      return this.treeStore?.getIsViewingSnapshot
+    },
+
+    agentOperatingNodeId() {
+      return this.treeStore?.getAgentOperatingNodeId
+    },
+
+    // 当前使用的Mind-elixir数据
+    currentMindElixirData() {
+      return this.treeStore?.getDisplaySnapshotData
     }
   },
-  
-  mounted() {
+
+  async mounted() {
     this.treeStore = useTreeStore()
+    await this.treeStore.refreshCurrentSnapshot()
   },
   
   methods: {
     // 处理节点选择
     handleNodeSelected(nodeInfo) {
       console.log('研究树节点被选中:', nodeInfo)
-      this.$emit('node-selected', nodeInfo)
+      // 直接操作treeStore，无需emit
     },
-    
+
     // 处理退出快照查看
     handleExitSnapshotView() {
       console.log('退出快照查看模式')
-      this.$emit('exit-snapshot-view')
-    },
-    
-    // 处理刷新数据
-    handleRefreshData() {
-      console.log('请求刷新数据')
-      // 重新加载测试数据
-      this.loadTestData()
-    },
-    
-    // 加载测试数据（仅调试入口，默认不自动调用）
-    loadTestData() {
-      console.log('🎨 加载简化测试数据')
-      this.currentMindElixirData = simpleTestData
-    },
-    
-    // 切换调试面板显示
-    toggleDebugInfo() {
-      this.showDebugInfo = !this.showDebugInfo
-    },
-    
-    // 模拟智能体操作
-    simulateAgentOperation() {
-      // 随机选择一个节点作为智能体操作目标
-      const nodes = ['node-1', 'node-2', 'node-3', 'node-4']
-      this.testAgentNodeId = nodes[Math.floor(Math.random() * nodes.length)]
-      
-      console.log('🤖 模拟智能体操作节点:', this.testAgentNodeId)
-      
-      // 3秒后清除操作状态
-      setTimeout(() => {
-        this.testAgentNodeId = null
-        console.log('🤖 智能体操作完成')
-      }, 3000)
-    },
-    
-    // 加载快照数据
-    loadSnapshotData() {
-      console.log('📸 加载快照数据')
-      // 使用转换器动态生成快照数据
-      const context = {
-        isSnapshotView: true,
-        agentOperatingNodeId: this.actualAgentOperatingNodeId
-      }
-      this.currentMindElixirData = this.transformer.transformToMindElixir(
-        mockBackendSnapshotData,
-        context
-      )
-    },
-    
-    // 加载后端数据（根据传入的snapshotData转换渲染）
-    async loadBackendData() {
-      console.log('🔗 根据当前快照渲染研究树')
-      this.isLoadingData = true
-      try {
-        const snapshot = this.snapshotData
-        if (!snapshot) {
-          console.warn('⚠️ 无可用的snapshotData用于渲染')
-          this.currentMindElixirData = null
-          return
-        }
-        const context = {
-          isSnapshotView: this.isSnapshotView,
-          agentOperatingNodeId: this.actualAgentOperatingNodeId
-        }
-        this.currentMindElixirData = this.transformer.transformToMindElixir(snapshot, context)
-        console.log('✅ 研究树已根据真实快照渲染')
-      } catch (error) {
-        console.error('❌ 渲染研究树失败:', error)
-      } finally {
-        this.isLoadingData = false
-      }
-    },
-    
-    // 清除测试数据
-    clearTestData() {
-      console.log('清除测试数据')
-      this.currentMindElixirData = null
-      this.testAgentNodeId = null
-      this.$message.warning('测试数据已清除')
-    }
-  }
-  ,
-  watch: {
-    // 监听来自父组件的真实快照数据变化，转换为Mind-elixir数据
-    snapshotData: {
-      handler(newVal) {
-        try {
-          if (!newVal) {
-            this.currentMindElixirData = null
-            return
-          }
-          const context = {
-            isSnapshotView: this.isSnapshotView,
-            agentOperatingNodeId: this.actualAgentOperatingNodeId
-          }
-          this.currentMindElixirData = this.transformer.transformToMindElixir(newVal, context)
-          console.log('🔄 已根据最新snapshotData更新研究树数据')
-        } catch (e) {
-          console.error('❌ 转换snapshotData失败:', e)
-        }
-      },
-      deep: true,
-      immediate: true
+      this.treeStore.exitSnapshotView()
     }
   }
 }
@@ -290,90 +123,113 @@ export default {
   overflow: hidden; /* 防止内容溢出 */
 }
 
-/* 调试面板样式 */
-.debug-panel {
+/* 快照查看指示器 */
+.snapshot-indicator {
   position: absolute;
   top: 20px;
   left: 20px;
   z-index: 1000;
-  max-width: 400px;
-  max-height: calc(100% - 40px); /* 确保调试面板不超出容器 */
-  overflow-y: auto; /* 如果内容过多，允许滚动 */
 }
 
-.debug-card {
+.snapshot-card {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
   border: 1px solid #e4e7ed;
 }
 
-.debug-header {
+.snapshot-content {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+
+.snapshot-icon {
+  color: #f59e0b;
+  font-size: 18px;
+}
+
+.snapshot-text {
   font-weight: 500;
+  color: #303133;
 }
 
-.debug-content {
-  margin-bottom: 16px;
+.return-btn {
+  margin-left: auto;
 }
 
-.debug-item {
-  margin-bottom: 8px;
-}
-
-.debug-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.debug-actions .el-button {
-  font-size: 12px;
-  padding: 4px 8px;
-}
-
-/* 调试控制按钮 */
-.debug-toggle {
+/* 智能体操作指示器 */
+.agent-indicator {
   position: absolute;
   top: 20px;
   right: 20px;
-  z-index: 999;
+  z-index: 1000;
 }
 
-.debug-toggle .el-button {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(4px);
+.agent-card {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e4e7ed;
+}
+
+.agent-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-icon {
+  color: #409eff;
+  font-size: 18px;
+}
+
+.agent-icon.rotating {
+  animation: rotating 2s linear infinite;
+}
+
+.agent-text {
+  font-weight: 500;
+  color: #303133;
+}
+
+@keyframes rotating {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .debug-panel {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    max-width: none;
-    max-height: calc(100vh - 20px); /* 在移动端确保不超过视口 */
-  }
-  
   .tree-container {
     min-height: 250px; /* 移动端减小最小高度 */
   }
-  
-  .debug-toggle {
+
+  .snapshot-indicator,
+  .agent-indicator {
     top: 10px;
+    left: 10px;
     right: 10px;
   }
-  
-  .debug-actions {
-    justify-content: center;
+
+  .snapshot-content,
+  .agent-content {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .return-btn {
+    margin-left: 0;
+    margin-top: 8px;
   }
 }
 
 /* 深色主题适配 */
-:root[data-theme="dark"] .debug-card {
+:root[data-theme="dark"] .snapshot-card,
+:root[data-theme="dark"] .agent-card {
   background: rgba(45, 45, 45, 0.95);
   border-color: #4c4d4f;
   color: #e4e7ed;

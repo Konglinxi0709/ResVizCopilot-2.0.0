@@ -15,6 +15,10 @@ from backend.database.schemas.request_models import (
     SetSelectedSolutionRequest,
 )
 
+@router.get("/snapshots/current-id")
+def get_current_snapshot_id():
+    return db.get_current_snapshot_id_query()
+
 @router.get("/snapshots/{snapshot_id}")
 def get_snapshot(snapshot_id: str):
     return db.get_snapshot_query(snapshot_id)

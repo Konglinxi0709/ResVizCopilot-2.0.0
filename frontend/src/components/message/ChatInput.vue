@@ -51,13 +51,7 @@ export default {
       type: String,
       default: ''
     },
-    
-    // 标题
-    title: {
-      type: String,
-      default: ''
-    },
-    
+        
     // 占位符
     placeholder: {
       type: String,
@@ -74,18 +68,6 @@ export default {
     isLoading: {
       type: Boolean,
       default: false
-    },
-    
-    // 智能体类型
-    agentType: {
-      type: String,
-      default: ''
-    },
-    
-    // 选中的节点信息
-    selectedNode: {
-      type: Object,
-      default: null
     },
     
     // 最大长度
@@ -113,7 +95,6 @@ export default {
     return {
       textareaRef: null,
       content: this.modelValue,
-      localTitle: this.title
     }
   },
   
@@ -141,10 +122,6 @@ export default {
     modelValue(newValue) {
       this.content = newValue
     },
-    
-    title(newValue) {
-      this.localTitle = newValue
-    }
   },
   
   mounted() {
@@ -179,52 +156,12 @@ export default {
       }
       
       // 发送消息
-      this.$emit('send', {
-        content: this.content.trim(),
-        title: this.localTitle.trim() || '用户消息'
-      })
+      this.$emit('send', this.content.trim())
       
       // 清空输入
       this.content = ''
-      this.localTitle = ''
       this.$emit('update:modelValue', '')
-      this.$emit('title-change', '')
     },
-    
-    handleTitleChange(value) {
-      this.localTitle = value
-      this.$emit('title-change', value)
-    },
-    
-    // 自动调整文本框高度
-    adjustTextareaHeight() {
-      if (!this.textareaRef) return
-      
-      this.$nextTick(() => {
-        const textarea = this.textareaRef
-        textarea.style.height = 'auto'
-        
-        const lineHeight = parseInt(getComputedStyle(textarea).lineHeight)
-        const minHeight = lineHeight * this.minRows
-        const maxHeight = lineHeight * this.maxRows
-        
-        const scrollHeight = textarea.scrollHeight
-        const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight))
-        
-        textarea.style.height = `${newHeight}px`
-      })
-    },
-    
-    // 获取节点显示信息
-    getNodeDisplayInfo() {
-      if (!this.selectedNode) return ''
-      
-      const { title, path } = this.selectedNode
-      if (path && path.length > 0) {
-        return `${path.join(' > ')} > ${title}`
-      }
-      return title
-    }
   }
 }
 </script>

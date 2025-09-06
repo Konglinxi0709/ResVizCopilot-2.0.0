@@ -3,291 +3,289 @@ import { apiService } from '../services/apiService'
 
 export const useProjectStore = defineStore('project', {
   state: () => ({
-    // 当前工程信息
+    // 当前工程信息（/projects/current/info接口数据，包含name、created_at、updated_at三个字段）
     currentProject: null,
-    
-    // 工程列表
-    projectList: [],
-    
+
+    // 工程列表（数组类型，/projects接口数据）
+    projectList: null,
+
     // 加载状态
     isLoading: false,
-    
-    // 最后保存时间
-    lastSaveTime: null,
-    
+
     // 错误信息
     error: null
   }),
-  
+
   getters: {
-    // 获取当前工程名称
-    currentProjectName: (state) => {
-      return state.currentProject?.name || null
-    },
-    
-    // 检查是否有当前工程
-    hasCurrentProject: (state) => {
-      return !!state.currentProject
-    },
-    
-    // 获取工程数量
-    projectCount: (state) => {
-      return state.projectList.length
-    },
-    
-    // 检查工程名称是否已存在
-    isProjectNameExists: (state) => {
-      return (name) => {
-        return state.projectList.some(project => project.name === name)
+    /**
+     * 获取当前工程对象
+     * 若本地无数据则自动触发同步，立即返回null
+     */
+    getCurrentProject: (state) => {
+      if (state.currentProject === null) {
+        // 触发同步但立即返回null
+        const store = useProjectStore()
+        store._syncStore()
+        return null
       }
-    }
+      return state.currentProject
+    },
+
+    /**
+     * 获取工程列表
+     * 若本地无数据（为null）则自动触发同步，立即返回null
+     */
+    getProjectList: (state) => {
+      if (state.projectList === null) {
+        // 触发同步但立即返回null
+        const store = useProjectStore()
+        store._syncStore()
+        return null
+      }
+      return state.projectList
+    },
+
+    /**
+     * 检查工程名称是否已存在，用于表单校验
+     */
+    getIsProjectNameExists: (state) => (name) => {
+      if (state.projectList === null) {
+        // 触发同步但立即返回false
+        const store = useProjectStore()
+        store._syncStore()
+        return false
+      }
+      return state.projectList.some(project => project.project_name === name)
+    },
+
+    /**
+     * 返回currentProject.updated_at
+     * 若为空值则视为"未保存"
+     */
+    getLastSaveTime: (state) => {
+      if (state.currentProject === null) {
+        // 触发同步但立即返回"未保存"
+        const store = useProjectStore()
+        store._syncStore()
+        return "未保存"
+      }
+      return state.currentProject?.updated_at || "未保存"
+    },
+
+    /**
+     * 返回加载状态，仅用于按钮禁用等UI逻辑
+     */
+    getIsLoading: (state) => state.isLoading
   },
-  
+
   actions: {
     // 设置加载状态
     setLoading(loading) {
       this.isLoading = loading
     },
-    
+
     // 设置错误信息
     setError(error) {
       this.error = error
     },
-    
+
     // 清除错误信息
     clearError() {
       this.error = null
     },
-    
-    // 获取工程列表
-    async fetchProjectList() {
+
+    /**
+     * 同步整个存储（内部接口）
+     * 1. /projects获取工程列表，更新projectList。projectList为null代表尚未同步
+     * 2. /projects/current/info获取当前工程信息，更新currentProject。currentProject为null代表尚未同步
+     */
+    async _syncStore() {
+      // 如果正在同步中，直接返回
+      if (this.isLoading) {
+        return
+      }
+
       try {
         this.setLoading(true)
         this.clearError()
-        
-        const response = await apiService.get('/projects')
-        
-        // 处理后端返回的数据结构
-        if (response.success && response.projects) {
-          // 转换数据格式，将 project_name 转为 name，过滤掉无效数据
-          this.projectList = response.projects
-            .filter(project => project && project.project_name) // 过滤掉空值和缺少project_name的项
-            .map(project => ({
-              name: project.project_name,
-              created_at: project.created_at,
-              updated_at: project.updated_at,
-              file_path: project.file_path
-            }))
-        } else {
+
+        // 并行获取工程列表和当前工程信息
+        const [projectsResponse, currentProjectResponse] = await Promise.all([
+          apiService.get('/projects'),
+          apiService.get('/projects/current/info')
+        ])
+
+        // 更新工程列表
+        console.log('工程列表API响应:', projectsResponse)
+        if (projectsResponse.success && projectsResponse.projects) {
+          // 处理包装后的响应
+          this.projectList = projectsResponse.projects
+          console.log('设置工程列表:', this.projectList)
+        } else if (Array.isArray(projectsResponse)) {
+          // 处理直接返回数组的情况
+          this.projectList = projectsResponse
+          console.log('设置工程列表(直接数组):', this.projectList)
+      } else {
+          console.log('工程列表响应无效，使用空数组')
           this.projectList = []
         }
-        
-        return this.projectList
+
+        // 更新当前工程信息
+        console.log('当前工程API响应:', currentProjectResponse)
+        if (currentProjectResponse.success && currentProjectResponse.data) {
+          // 处理包装后的响应
+          this.currentProject = currentProjectResponse.data
+          console.log('设置当前工程:', this.currentProject)
+        } else if (currentProjectResponse.project_name) {
+          // 处理直接返回的数据对象
+          this.currentProject = currentProjectResponse
+          console.log('设置当前工程(直接数据):', this.currentProject)
+        } else {
+          console.log('当前工程响应无效，使用空对象')
+          this.currentProject = {}
+        }
+
       } catch (error) {
-        console.error('获取工程列表失败:', error)
-        this.setError('获取工程列表失败')
+        console.error('同步工程存储失败:', error)
+        this.setError('同步工程数据失败')
         throw error
       } finally {
         this.setLoading(false)
       }
     },
-    
-    // 创建新工程
+
+    /**
+     * 创建新工程
+     * 调用/projects?project_name=接口，之后同步projectStore
+     */
     async createProject(projectName) {
       try {
-        this.setLoading(true)
         this.clearError()
-        
-        // 检查工程名称是否已存在
-        if (this.isProjectNameExists(projectName)) {
-          throw new Error(`工程名称 "${projectName}" 已存在`)
-        }
-        
+
         const response = await apiService.post(`/projects?project_name=${encodeURIComponent(projectName)}`)
-        
-        const newProject = {
-          name: response.project_name || projectName,
-          created_at: response.created_at,
-          updated_at: response.updated_at
+
+      if (response.success) {
+            // 创建成功后同步整个存储
+            await this._syncStore()
+        return response
+      } else {
+        throw new Error(response.message || '创建工程失败')
         }
-        
-        // 更新工程列表（只有当newProject有效时才添加）
-        if (newProject && newProject.name) {
-          this.projectList.push(newProject)
-        }
-        
-        // 设置为当前工程
-        this.currentProject = newProject
-        this.lastSaveTime = new Date()
-        
-        return newProject
-      } catch (error) {
-        console.error('创建工程失败:', error)
-        this.setError(error.message || '创建工程失败')
-        throw error
-      } finally {
-        this.setLoading(false)
+
+        } catch (error) {
+          console.error('创建工程失败:', error)
+          this.setError(error.message || '创建工程失败')
+          throw error
       }
     },
-    
-    // 加载工程
+
+    /**
+     * 加载工程
+     * 调用/projects/接口，直接更新currentProject，无需全部同步
+     */
     async loadProject(projectName) {
       try {
-        this.setLoading(true)
         this.clearError()
-        
+
         const response = await apiService.get(`/projects/${projectName}`)
-        const project = {
-          name: response.project_name || projectName,
+
+      if (response.success) {
+            // 只更新当前工程信息
+            this.currentProject = {
+              name: response.project_name || projectName,
           created_at: response.created_at,
           updated_at: response.updated_at
         }
-        
-        // 设置为当前工程
-        this.currentProject = project
-        this.lastSaveTime = new Date()
-        
-        return project
-      } catch (error) {
-        console.error('加载工程失败:', error)
-        this.setError('加载工程失败')
-        throw error
-      } finally {
-        this.setLoading(false)
+        return response
+      } else {
+        throw new Error(response.message || '加载工程失败')
+        }
+
+        } catch (error) {
+          console.error('加载工程失败:', error)
+          this.setError('加载工程失败')
+          throw error
       }
     },
-    
-    // 保存当前工程
+
+    /**
+     * 保存当前工程
+     * 调用/projects/save接口，直接更新currentProject的updated_at，无需全部同步
+     */
     async saveProject() {
       try {
-        if (!this.currentProject) {
-          throw new Error('没有当前工程可保存')
-        }
-        
-        this.setLoading(true)
         this.clearError()
-        
+
         const response = await apiService.post('/projects/save')
-        
-        // 更新最后保存时间
-        this.lastSaveTime = new Date()
-        
-        return response.data
-      } catch (error) {
-        console.error('保存工程失败:', error)
-        this.setError('保存工程失败')
-        throw error
-      } finally {
-        this.setLoading(false)
+
+      if (response.success) {
+            // 更新当前工程的updated_at
+            if (this.currentProject) {
+              this.currentProject.updated_at = new Date().toISOString()
+        }
+        return response
+      } else {
+        throw new Error(response.message || '保存工程失败')
+        }
+      
+        } catch (error) {
+          console.error('保存工程失败:', error)
+          this.setError('保存工程失败')
+          throw error
       }
     },
-    
-    // 另存为工程
+
+    /**
+     * 另存为工程
+     * 调用/projects/save-as?new_project_name=接口，之后同步projectStore
+     */
     async saveAsProject(newProjectName) {
       try {
-        this.setLoading(true)
         this.clearError()
-        
-        // 检查工程名称是否已存在
-        if (this.isProjectNameExists(newProjectName)) {
-          throw new Error(`工程名称 "${newProjectName}" 已存在`)
-        }
-        
+
         const response = await apiService.post(`/projects/save-as?new_project_name=${encodeURIComponent(newProjectName)}`)
-        
-        const newProject = {
-          name: response.project_name || newProjectName,
-          created_at: response.created_at,
-          updated_at: response.updated_at
+
+      if (response.success) {
+            // 另存为成功后同步整个存储
+            await this._syncStore()
+        return response
+      } else {
+        throw new Error(response.message || '另存为工程失败')
         }
-        
-        // 更新工程列表（只有当newProject有效时才添加）
-        if (newProject && newProject.name) {
-          this.projectList.push(newProject)
-        }
-        
-        // 设置为当前工程
-        this.currentProject = newProject
-        this.lastSaveTime = new Date()
-        
-        return newProject
-      } catch (error) {
-        console.error('另存为工程失败:', error)
-        this.setError(error.message || '另存为工程失败')
-        throw error
-      } finally {
-        this.setLoading(false)
+
+        } catch (error) {
+          console.error('另存为工程失败:', error)
+          this.setError(error.message || '另存为工程失败')
+          throw error
       }
     },
-    
-    // 删除工程
+
+    /**
+     * 删除工程
+     * 调用delete /projects/接口，之后同步projectStore
+     */
     async deleteProject(projectName) {
       try {
-        this.setLoading(true)
         this.clearError()
-        
+
         await apiService.delete(`/projects/${projectName}`)
-        
-        // 从工程列表中移除
-        this.projectList = this.projectList.filter(
-          project => project.name !== projectName
-        )
-        
-        // 如果删除的是当前工程，清空当前工程
-        if (this.currentProject?.name === projectName) {
-          this.currentProject = null
-          this.lastSaveTime = null
-        }
-        
-        return true
+
+        // 删除成功后同步整个存储
+        await this._syncStore()
+
       } catch (error) {
         console.error('删除工程失败:', error)
         this.setError('删除工程失败')
         throw error
-      } finally {
-        this.setLoading(false)
       }
     },
-    
-    // 设置当前工程
-    setCurrentProject(project) {
-      this.currentProject = project
-      this.lastSaveTime = new Date()
-    },
-    
-    // 清空当前工程
-    clearCurrentProject() {
-      this.currentProject = null
-      this.lastSaveTime = null
-    },
-    
-    // 获取当前工程信息
-    async getCurrentProjectInfo() {
-      try {
-        const response = await apiService.get('/projects/current/info')
-        return response.data
-      } catch (error) {
-        console.error('获取当前工程信息失败:', error)
-        throw error
-      }
-    },
-    
-    // 获取当前工程完整数据
-    async getCurrentProjectFullData() {
-      try {
-        const response = await apiService.get('/projects/current/full-data')
-        return response.data
-      } catch (error) {
-        console.error('获取当前工程完整数据失败:', error)
-        throw error
-      }
+
+    /**
+     * 强制重新同步工程数据
+     * 用于需要强制刷新工程数据的场景
+     */
+    async refreshProjects() {
+      await this._syncStore()
     }
-  },
-  
-  // 持久化配置
-  persist: {
-    key: 'resviz-project-store',
-    storage: localStorage,
-    paths: ['currentProject', 'lastSaveTime']
   }
 })

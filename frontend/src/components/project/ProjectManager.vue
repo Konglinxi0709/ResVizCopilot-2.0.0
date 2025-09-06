@@ -13,7 +13,7 @@
       <div v-if="currentProject" class="current-project-info">
         <h5>当前工程</h5>
         <div class="project-card current">
-          <div class="project-name">{{ currentProject.name }}</div>
+          <div class="project-name">{{ currentProject.project_name }}</div>
           <div class="project-actions">
             <el-button type="text" size="small" @click="handleSaveAs">
               另存为
@@ -35,15 +35,15 @@
         </div>
         
         <div v-else class="project-list">
-          <template v-for="project in projectList" :key="project?.name || 'unknown'">
+          <template v-for="project in projectList" :key="project?.project_name || 'unknown'">
             <div 
-              v-if="project && project.name"
+              v-if="project && project.project_name"
               class="project-card"
               :class="{ active: isCurrentProject(project) }"
               @click="handleLoadProject(project)"
             >
             <div class="project-info">
-              <div class="project-name">{{ project.name }}</div>
+              <div class="project-name">{{ project.project_name }}</div>
               <div class="project-meta">
                 <span class="create-time">
                   创建: {{ formatTime(project.created_at) }}
@@ -141,15 +141,15 @@ export default {
   
   computed: {
     currentProject() {
-      return this.projectStore?.currentProject
+      return this.projectStore?.getCurrentProject
     },
-    
+
     projectList() {
-      return this.projectStore?.projectList || []
+      return this.projectStore?.getProjectList || []
     },
-    
+
     isLoading() {
-      return this.projectStore?.isLoading || false
+      return this.projectStore?.getIsLoading || false
     }
   },
   
@@ -162,7 +162,7 @@ export default {
     // 加载工程列表
     async loadProjects() {
       try {
-        await this.projectStore.fetchProjectList()
+        await this.projectStore.refreshProjects()
       } catch (error) {
         console.error('加载工程列表失败:', error)
       }
@@ -176,20 +176,20 @@ export default {
     
     // 检查是否为当前工程
     isCurrentProject(project) {
-      return this.currentProject?.name && project?.name && 
-             this.currentProject.name === project.name
+      return this.currentProject?.project_name && project?.project_name &&
+             this.currentProject.project_name === project.project_name
     },
     
     // 处理加载工程
     async handleLoadProject(project) {
-      if (!project?.name || this.isCurrentProject(project)) {
+      if (!project?.project_name || this.isCurrentProject(project)) {
         return
       }
       
       try {
-        await this.projectStore.loadProject(project.name)
+        await this.projectStore.loadProject(project.project_name)
         this.$emit('project-changed', project)
-        ElMessage.success(`已加载工程: ${project.name}`)
+        ElMessage.success(`已加载工程: ${project.project_name}`)
       } catch (error) {
         console.error('加载工程失败:', error)
         ElMessage.error('加载工程失败')
@@ -210,11 +210,11 @@ export default {
     
     // 处理删除工程
     async handleDeleteProject(project) {
-      if (!project?.name) return
+      if (!project?.project_name) return
       
       try {
         await ElMessageBox.confirm(
-          `确定要删除工程 "${project.name}" 吗？此操作不可撤销。`,
+          `确定要删除工程 "${project.project_name}" 吗？此操作不可撤销。`,
           '确认删除',
           {
             confirmButtonText: '确定删除',
@@ -224,8 +224,8 @@ export default {
           }
         )
         
-        await this.projectStore.deleteProject(project.name)
-        ElMessage.success(`工程 "${project.name}" 已删除`)
+        await this.projectStore.deleteProject(project.project_name)
+        ElMessage.success(`工程 "${project.project_name}" 已删除`)
         
         // 如果删除的是当前工程，清空当前工程
         if (this.isCurrentProject(project)) {
@@ -247,7 +247,7 @@ export default {
         return
       }
       
-      this.saveAsForm.name = `${this.currentProject.name}_副本`
+      this.saveAsForm.name = `${this.currentProject.project_name}_副本`
       this.showSaveAsDialog = true
     },
     

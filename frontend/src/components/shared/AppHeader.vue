@@ -11,7 +11,7 @@
       <div v-if="currentProject" class="current-project">
         <el-tag type="primary" size="large">
           <el-icon><Folder /></el-icon>
-          {{ currentProject.name }}
+          {{ currentProject.project_name }}
         </el-tag>
         <span v-if="lastSaveTime" class="save-time">
           最后保存: {{ formatTime(lastSaveTime) }}
@@ -173,16 +173,16 @@ export default {
     currentTheme() {
       return this.uiStore?.theme
     },
-    
+
     lastSaveTime() {
-      return this.projectStore?.lastSaveTime
+      return this.projectStore?.getLastSaveTime
     },
-    
+
     isOperationDisabled() {
       // 当有智能体正在工作或其他操作进行中时禁用
-      return this.projectStore?.isLoading || this.uiStore?.isLoading
+      return this.projectStore?.getIsLoading || this.uiStore?.isLoading
     },
-    
+
     currentLanguageLabel() {
       const locale = this.uiStore?.language
       return locale === 'zh-CN' ? '中文' : 'English'

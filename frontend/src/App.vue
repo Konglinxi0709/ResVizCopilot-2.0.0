@@ -1,23 +1,23 @@
 <template>
   <div id="app" class="app-container">
     <!-- 应用头部 -->
-    <AppHeader 
-      :current-project="currentProject"
+    <AppHeader
+      :current-project="getCurrentProject"
       @language-change="handleLanguageChange"
       @theme-change="handleThemeChange"
     />
-    
+
     <!-- 主体内容区域 -->
     <div class="main-content">
       <!-- 左侧面板 - 工程管理 -->
-      <div 
-        class="left-panel" 
+      <div
+        class="left-panel"
         :class="{ 'collapsed': leftPanelCollapsed }"
       >
         <div class="panel-header">
           <h3 v-if="!leftPanelCollapsed">{{ $t('project.list') }}</h3>
-          <el-button 
-            type="text" 
+          <el-button
+            type="text"
             @click="toggleLeftPanel"
             class="collapse-btn"
             :class="{ 'collapsed-btn': leftPanelCollapsed }"
@@ -28,78 +28,62 @@
             </el-icon>
           </el-button>
         </div>
-        <ProjectManager 
+        <ProjectManager
           v-if="!leftPanelCollapsed"
           @project-changed="handleProjectChanged"
         />
       </div>
-      
+
       <!-- 中央面板 - 研究树可视化 -->
       <div class="center-panel">
         <div class="panel-header">
           <h3>{{ $t('tree.title') }}</h3>
-          <div class="tree-controls">
-            <el-button 
-              v-if="isViewingSnapshot" 
-              type="warning" 
-              @click="exitSnapshotView"
-            >
-              <el-icon><Camera /></el-icon>
-              {{ $t('tree.backToCurrent') }}
-            </el-button>
-          </div>
         </div>
-        <ResearchTree 
-          :snapshot-data="currentSnapshotData"
-          :is-snapshot-view="isViewingSnapshot"
-          :agent-operating-node-id="agentOperatingNodeId"
-          @node-selected="handleNodeSelected"
-          @exit-snapshot-view="exitSnapshotView"
-        />
+        <ResearchTree />
       </div>
-      
+
       <!-- 右侧面板 - 消息列表和AI对话 -->
-      <div 
-        class="right-panel" 
+      <div
+        class="right-panel"
         :class="{ 'collapsed': rightPanelCollapsed }"
       >
         <div class="panel-header">
           <div class="panel-header-left">
             <el-icon v-if="!rightPanelCollapsed"><ChatDotRound /></el-icon>
             <h3 v-if="!rightPanelCollapsed">{{ $t('message.title') }}</h3>
-            <el-tag v-if="!rightPanelCollapsed && messageCount > 0" type="info" size="small">
-              {{ messageCount }} 条消息
+            <el-tag v-if="!rightPanelCollapsed && getMessageCount > 0" type="info" size="small">
+              {{ getMessageCount }} 条消息
             </el-tag>
           </div>
-          
+
           <div class="panel-header-right">
             <!-- 连接状态指示 -->
             <div v-if="!rightPanelCollapsed" class="connection-status" :class="connectionStatusClass">
               <el-icon><component :is="connectionStatusIcon" /></el-icon>
               <span class="status-text">{{ connectionStatusText }}</span>
             </div>
-            
+
             <!-- 消息操作下拉菜单 -->
             <el-dropdown v-if="!rightPanelCollapsed" @command="handleMessageAction" trigger="click">
               <el-button type="text" size="small">
                 <el-icon><More /></el-icon>
               </el-button>
-              
+
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item 
+                  <el-dropdown-item
                     command="sync-messages"
                     :icon="Refresh"
-                    :disabled="isGenerating"
+                    :disabled="getIsGenerating"
                   >
                     同步消息
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            
-            <el-button 
-              type="text" 
+
+            <el-button
+              type="text"
               @click="toggleRightPanel"
               class="collapse-btn"
               :class="{ 'collapsed-btn': rightPanelCollapsed }"
@@ -111,17 +95,14 @@
             </el-button>
           </div>
         </div>
-        <MessageCenter 
+        <MessageCenter
           v-if="!rightPanelCollapsed"
-          :selected-node-id="selectedNodeId"
-          @view-snapshot="handleViewSnapshot"
-          @agent-operating="handleAgentOperating"
         />
       </div>
     </div>
-    
+
     <!-- 全局加载指示器 -->
-    <div v-if="isLoading" class="global-loading">
+    <div v-if="getIsLoading" class="global-loading">
       <div class="loading-overlay">
         <el-icon class="loading-icon"><Loading /></el-icon>
         <div class="loading-text">{{ loadingText || $t('app.loading') }}</div>
@@ -175,66 +156,57 @@ export default {
   },
   
   computed: {
-    currentProject() {
-      return this.projectStore?.currentProject
+    // 使用新的stores getters接口
+    getCurrentProject() {
+      return this.projectStore?.getCurrentProject
     },
-    
+
+
+    getMessageCount() {
+      return this.messageStore?.getMessageCount
+    },
+
+    getIsGenerating() {
+      return this.messageStore?.getIsGenerating
+    },
+
+    getError() {
+      return this.messageStore?.getError
+    },
+
+    // UI状态
     leftPanelCollapsed() {
       return this.uiStore?.leftPanelCollapsed
     },
-    
+
     rightPanelCollapsed() {
       return this.uiStore?.rightPanelCollapsed
     },
-    
-    isLoading() {
+
+    getIsLoading() {
+      // 检查所有存储器的加载状态
       return this.uiStore?.isLoading
     },
-    
+
     loadingText() {
       return this.uiStore?.loadingText
     },
-    
-    currentSnapshotData() {
-      return this.treeStore?.displaySnapshotData
-    },
-    
-    isViewingSnapshot() {
-      return this.treeStore?.isViewingSnapshot
-    },
-    
-    selectedNodeId() {
-      return this.treeStore?.selectedNodeId
-    },
-    
-    agentOperatingNodeId() {
-      return this.treeStore?.agentOperatingNodeId
-    },
-    
-    // 消息相关计算属性
-    messageCount() {
-      return this.messageStore?.messageCount
-    },
-    
-    isGenerating() {
-      return this.messageStore?.isGenerating
-    },
-    
+
     // 连接状态
     connectionStatus() {
-      if (this.isGenerating) {
+      if (this.getIsGenerating) {
         return 'generating'
-      } else if (this.messageStore?.error) {
+      } else if (this.getError) {
         return 'error'
       } else {
         return 'connected'
       }
     },
-    
+
     connectionStatusClass() {
       return `status-${this.connectionStatus}`
     },
-    
+
     connectionStatusIcon() {
       switch (this.connectionStatus) {
         case 'generating': return 'Loading'
@@ -243,7 +215,7 @@ export default {
         default: return 'Check'
       }
     },
-    
+
     connectionStatusText() {
       switch (this.connectionStatus) {
         case 'generating': return '正在生成...'
@@ -255,45 +227,23 @@ export default {
   },
   
   async mounted() {
-    try {
-      // 初始化store实例
-      this.projectStore = useProjectStore()
-      this.treeStore = useTreeStore()
-      this.messageStore = useMessageStore()
-      this.uiStore = useUIStore()
-      
-      // 初始化应用
-      await this.initializeApp()
-    } catch (error) {
-      console.error('应用初始化失败:', error)
-      ElMessage.error('应用初始化失败，请刷新页面重试')
-    }
+    // 初始化store实例
+    this.projectStore = useProjectStore()
+    this.treeStore = useTreeStore()
+    this.messageStore = useMessageStore()
+    this.uiStore = useUIStore()
   },
   
   methods: {
-    async initializeApp() {
-      // 设置加载状态
-      this.uiStore.setLoading(true, '正在初始化应用...')
-      
-      try {
-        // 加载项目列表
-        await this.projectStore.fetchProjectList()
-        
-        // 如果有当前项目，加载项目数据
-        if (this.currentProject) {
-          await this.loadCurrentProject()
-        }
-      } finally {
-        this.uiStore.setLoading(false)
-      }
-    },
-    
+
     async loadCurrentProject() {
-      if (!this.currentProject) return
-      
+      if (!this.getCurrentProject) return
+
       try {
         // 加载研究树数据
-        await this.treeStore.loadCurrentSnapshot()
+        await this.projectStore.refreshProjects()
+        await this.treeStore.refreshCurrentSnapshot()
+        await this.messageStore.refreshMessages()
       } catch (error) {
         console.error('加载当前项目失败:', error)
         ElMessage.error('加载项目数据失败')
@@ -312,11 +262,11 @@ export default {
     // 项目变更处理
     async handleProjectChanged() {
       try {
+        console.log("触发项目变更处理！！！")
         await this.loadCurrentProject()
         // 同步消息历史，确保切换工程后右侧面板立即更新
-        if (this.messageStore?.syncMessagesFromBackend) {
-          await this.messageStore.syncMessagesFromBackend()
-        }
+        await this.messageStore.refreshMessages()
+        await this.treeStore.refreshCurrentSnapshot()
         ElMessage.success('项目切换成功')
       } catch (error) {
         console.error('项目切换失败:', error)
@@ -324,16 +274,6 @@ export default {
       }
     },
     
-    // 节点选择处理
-    handleNodeSelected(nodeInfo) {
-      this.treeStore.setSelectedNode(nodeInfo.id)
-      console.log('选中节点:', nodeInfo)
-    },
-    
-    // 快照查看控制
-    async exitSnapshotView() {
-      await this.treeStore.exitSnapshotView()
-    },
     
     // 语言切换
     handleLanguageChange(language) {
@@ -352,29 +292,13 @@ export default {
     async handleMessageAction(command) {
       switch (command) {
         case 'sync-messages':
-          await this.messageStore.syncMessagesFromBackend()
+          await this.messageStore.refreshMessages()
           break
         default:
           console.warn('未知的消息操作:', command)
       }
     },
     
-    // 快照查看处理
-    async handleViewSnapshot(snapshotId) {
-      try {
-        await this.treeStore.viewSnapshot(snapshotId)
-        ElMessage.success('快照查看成功')
-      } catch (error) {
-        console.error('查看快照失败:', error)
-        ElMessage.error('查看快照失败')
-      }
-    },
-    
-    // 智能体操作处理
-    handleAgentOperating(nodeId) {
-      this.treeStore.setAgentOperatingNode(nodeId)
-      console.log('智能体操作节点:', nodeId)
-    }
   }
 }
 </script>

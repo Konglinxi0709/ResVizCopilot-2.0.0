@@ -89,6 +89,7 @@ ResVizCopilot-2.0.0/
 
 #### 基础CRUD操作
 
+
 | 接口 | 方法 | 路径 | 功能描述 |
 |------|------|------|----------|
 | 创建根问题 | POST | `/research-tree/problems/root` | 创建新的根级研究问题 |
@@ -99,6 +100,7 @@ ResVizCopilot-2.0.0/
 | 删除解决方案 | DELETE | `/research-tree/solutions/{solution_id}` | 删除解决方案及其子树 |
 | 设置选中方案 | POST | `/research-tree/problems/{problem_id}/selected-solution` | 设置问题的当前选中解决方案 |
 | 获取快照 | GET | `/research-tree/snapshots/{snapshot_id}` | 获取指定快照的完整数据 |
+| 获取当前快照ID | GET | `/research-tree/snapshots/current-id` | 获取当前研究树快照的唯一ID |
 
 ### 智能体调用接口
 
