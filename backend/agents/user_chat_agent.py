@@ -140,7 +140,7 @@ class UserChatAgent(AgentBase):
             env_info = await self._get_environment_info(problem_id, solution_id)
             current_solution = self.database_manager.get_solution_detail_query(solution_id)["data"]["detail"]
             message_list = self._get_visible_messages_string(solution_id, NodeType.SOLUTION)
-            current_solution_children_request_map = self.database_manager.get_solution_children_request_map_by_title_query(solution_id)["data"]["children_request_map"]
+            current_solution_children_request_map = self.database_manager.get_solution_children_request_map_by_id_query(solution_id)["data"]["children_request_map"]
             current_solution_sub_problem_list = str(list(current_solution_children_request_map.keys()))
 
             info = {**env_info, "supervisor_name": "用户", "modify_plan": modify_plan, "current_solution_sub_problem_list": current_solution_sub_problem_list,

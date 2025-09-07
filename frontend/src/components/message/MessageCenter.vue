@@ -143,10 +143,10 @@ export default {
 
       if (this.selectedAgent === 'auto_research_agent') {
         // 从treeStore获取实施问题标题列表
-        return this.treeStore?.getAllImplementaionProblemTitles || []
+        return this.treeStore?.getAllImplementaionProblemTitles() || []
       } else if (this.selectedAgent === 'user_chat_agent') {
         // 从treeStore获取解决方案标题列表
-        return this.treeStore?.getAllSolutionTitles || []
+        return this.treeStore?.getAllSolutionTitles() || []
       }
 
       return []

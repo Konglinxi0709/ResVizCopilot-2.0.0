@@ -24,12 +24,6 @@ export default {
       default: null
     },
 
-    // 选中的节点ID (v-model)
-    selectedNodeId: {
-      type: String,
-      default: null
-    },
-
     // 自定义配置
     options: {
       type: Object,
@@ -37,7 +31,7 @@ export default {
     }
   },
 
-  emits: ['node-selected', 'update:selectedNodeId'],
+  emits: ['node-select'],
   
   data() {
     return {
@@ -100,6 +94,21 @@ export default {
         this.mind = new MindElixir(config)
         
         console.log('✅ Mind-elixir实例创建成功:', this.mind)
+
+        // 添加节点选择监听
+        this.mind.bus.addListener('selectNode', (nodeObj, clickEvent) => {
+          if (clickEvent && nodeObj) {
+            console.log('🎯 节点被选中:', nodeObj)
+            const nodeId = nodeObj.id
+            this.$emit('node-select', nodeId)
+          }
+        })
+
+        // 添加节点取消选择监听
+        this.mind.bus.addListener('unselectNode', () => {
+          console.log('🎯 节点取消选中')
+          this.$emit('node-select', null)
+        })
         
         // 如果有数据，立即渲染
         if (this.mindElixirData) {
@@ -121,15 +130,15 @@ export default {
         direction: MindElixir.RIGHT,
         locale: 'zh_CN',
         // 关键：限制内部画布尺寸的扩展，避免 map-canvas 无限增大
-        overflowHidden: true,
+        overflowHidden: false,
         
         // 只读模式配置
         draggable: false,
-        editable: false,
-        contextMenu: false,
+        editable: false, // 确保可以选择
+        contextMenu: true,
         toolBar: true,
         keypress: false,
-        
+        //
         // 禁用所有编辑操作
         before: {
           insertSibling: () => false,
@@ -147,17 +156,6 @@ export default {
           copyNodes: () => false,
           beginEdit: () => false
         },
-        
-        // 主题配置
-        theme: {
-          name: 'Default',
-          cssVar: {
-            '--main-bgcolor': '#ffffff',
-            '--main-color': '#303133',
-            '--color': '#666666',
-            '--bgcolor': '#f6f6f6'
-          }
-        }
       }
       
       // 合并自定义配置
@@ -286,22 +284,6 @@ export default {
         console.error('❌ 重新初始化失败:', error)
         this.$message?.error('思维导图重新初始化失败')
       }
-    },
-    
-    // 处理节点选择事件
-    handleNodeSelect(nodeObj) {
-      console.log('🎯 节点被选中:', nodeObj)
-
-      const nodeId = nodeObj.id
-      this.$emit('update:selectedNodeId', nodeId)
-
-      const nodeInfo = {
-        id: nodeId,
-        title: nodeObj.topic,
-        data: nodeObj
-      }
-
-      this.$emit('node-selected', nodeInfo)
     },
     
   }

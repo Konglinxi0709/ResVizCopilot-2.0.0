@@ -996,46 +996,6 @@ class StreamMessageClient:
         
         print("=" * 80)
 
-    async def publish_user_action_message(self, action_type: str, params: Dict[str, Any], result: Dict[str, Any], is_error: bool = False) -> None:
-        """
-        发布用户操作消息
-        
-        Args:
-            action_type: 操作类型
-            params: 操作参数
-            result: 操作结果
-            is_error: 是否为错误结果
-        """
-        try:
-            # 构建消息内容
-            if is_error:
-                title = f"操作失败: {action_type}"
-                content = f"操作类型: {action_type}\n参数: {params}\n错误: {result['message']}"
-            else:
-                title = f"操作成功: {action_type}"
-                content = f"操作类型: {action_type}\n参数: {params}\n结果: {result['message']}"
-            
-            # 创建Patch对象而不是字典
-            patch = {
-                "message_id": str(uuid.uuid4()),  # 创建新消息
-                "role": "user",  # 用户操作消息
-                "title": title,
-                "content_delta": content,
-                "action_title": action_type,  # 使用action_title字段
-                "action_params": params,
-                "snapshot": result.get("snapshot", {}),
-                "snapshot_id": result.get("snapshot_id", ""),
-                "visible_node_ids": [],  # 用户操作消息全局可见
-                "finished": True
-            }
-            
-            # 调用回调函数发布消息
-            await self.handle_patch(patch)
-            
-        except Exception as e:
-            # 发布消息失败时记录日志，但不影响主操作
-            print(f"发布用户操作消息失败: {e}")
-    
 
 def create_root_problem() -> str:
     """通过HTTP接口创建根研究问题"""

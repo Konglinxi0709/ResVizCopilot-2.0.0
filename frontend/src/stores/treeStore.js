@@ -160,8 +160,9 @@ export const useTreeStore = defineStore('tree', {
 
     /**
      * 获取当前研究树中所有解决方案节点的标题
+     * @param {boolean} onlySelectedSolution - 如果为true，则只搜索选中的解决方案及其下级节点
      */
-    getAllSolutionTitles: (state) => {
+    getAllSolutionTitles: (state) => (onlySelectedSolution = true) => {
       if (state.currentSnapshot === null) {
         const store = useTreeStore()
         store._syncCurrentSnapshot()
@@ -169,13 +170,21 @@ export const useTreeStore = defineStore('tree', {
       }
 
       const titles = []
-      const findSolutionTitles = (nodes) => {
+      const findSolutionTitles = (nodes, parentNode = null) => {
         for (const node of nodes) {
+          // 如果只搜索选中的解决方案，且当前是解决方案节点，且父节点是问题节点
+          // 则检查该解决方案是否被选中，如果未被选中则跳过
+          if (onlySelectedSolution && node.type === "solution" && parentNode && 
+              parentNode.type === "problem" && parentNode.selected_solution_id !== node.id) {
+            continue
+          }
+          
           if (node.type === "solution") {
             titles.push(node.title)
           }
+          
           if (node.children) {
-            findSolutionTitles(node.children)
+            findSolutionTitles(node.children, node)
           }
         }
       }
@@ -188,8 +197,9 @@ export const useTreeStore = defineStore('tree', {
 
     /**
      * 获取当前研究树所有实施问题节点的标题
+     * @param {boolean} onlySelectedSolution - 如果为true，则只搜索选中的解决方案及其下级节点
      */
-    getAllImplementaionProblemTitles: (state) => {
+    getAllImplementaionProblemTitles: (state) => (onlySelectedSolution = true) => {
       if (state.currentSnapshot === null) {
         const store = useTreeStore()
         store._syncCurrentSnapshot()
@@ -197,13 +207,18 @@ export const useTreeStore = defineStore('tree', {
       }
 
       const titles = []
-      const findImplementationProblemTitles = (nodes) => {
+      const findImplementationProblemTitles = (nodes, parentNode = null) => {
         for (const node of nodes) {
           if (node.type === "problem" && node.problem_type === "implementation") {
             titles.push(node.title)
           }
+          if (onlySelectedSolution && node.type === "solution" && parentNode && 
+              parentNode.type === "problem" && parentNode.selected_solution_id !== node.id) {
+            continue
+          }
+          
           if (node.children) {
-            findImplementationProblemTitles(node.children)
+            findImplementationProblemTitles(node.children, node)
           }
         }
       }
@@ -216,31 +231,163 @@ export const useTreeStore = defineStore('tree', {
 
     /**
      * 根据标题得到节点id
+     * @param {string} title - 节点标题
+     * @param {boolean} onlySelectedSolution - 如果为true，则只搜索选中的解决方案及其下级节点
+     * @returns {string|null} 节点ID
      */
-    getNodeIdByTitle: (state) => (title) => {
+    getNodeIdByTitle: (state) => (title, onlySelectedSolution = true) => {
       if (state.currentSnapshot === null) {
         const store = useTreeStore()
         store._syncCurrentSnapshot()
         return null
       }
 
-      const findNodeByTitle = (nodes) => {
-        for (const node of nodes) {
-          if (node.title === title) {
-            return node.id
-          }
-          if (node.children) {
-            const result = findNodeByTitle(node.children)
-            if (result) return result
-          }
+      if (state.currentSnapshot.roots) {
+        const store = useTreeStore()
+        const nodeId = store._findNodeByTitle(state.currentSnapshot.roots, title, null, [], onlySelectedSolution)
+        if (nodeId) {
+          return nodeId
         }
+      }
+      return null
+    },
+    
+    /**
+     * 检查节点标题是否已存在
+     * @param {string} title - 节点标题
+     * @param {string[]} excludeNodeIds - 排除的节点ID列表
+     * @param {boolean} onlySelectedSolution - 如果为true，则只搜索选中的解决方案及其下级节点
+     * @returns {boolean} 标题是否存在
+     */
+    getIsNodeTitleExists: (state) => (title, excludeNodeIds = [], onlySelectedSolution = true) => {
+      const store = useTreeStore()
+      if (state.currentSnapshot === null) {
+        store._syncCurrentSnapshot()
+        return true
+      }
+      return store._findNodeByTitle(state.currentSnapshot.roots, title, null, excludeNodeIds, onlySelectedSolution) !== null
+    },
+
+    /**
+     * 根据节点ID获取节点类型
+     */
+    getNodeType: (state) => (nodeId) => {
+      if (!nodeId || !state.currentSnapshot) return null
+      const node = useTreeStore()._findNodeById(state.currentSnapshot.roots, nodeId)
+      return node ? node.type : null
+    },
+
+    /**
+     * 判断问题节点的问题类型
+     */
+    getProblemNodeType: (state) => (problemNodeId) => {
+      if (!problemNodeId || !state.currentSnapshot) return null
+      const node = useTreeStore()._findNodeById(state.currentSnapshot.roots, problemNodeId)
+      return node ? node.problem_type : null
+    },
+
+
+    /**
+     * 根据解决方案ID获取解决方案面板所需数据
+     * @param {string} solutionId - 解决方案ID
+     * @returns {Object|null} 解决方案数据
+     */
+    getSolutionPanelData: (state) => (solutionId) => {
+      if (!solutionId || !state.currentSnapshot) return null
+
+      const solutionNode = useTreeStore()._findNodeById(state.currentSnapshot.roots, solutionId)
+      if (!solutionNode || solutionNode.type !== "solution") {
         return null
       }
 
-      if (state.currentSnapshot.roots) {
-        return findNodeByTitle(state.currentSnapshot.roots)
+      const parentProblemId = useTreeStore()._findParentNodeId(state.currentSnapshot.roots, solutionId)
+      if (!parentProblemId) {
+        console.error('无法找到解决方案的父问题节点:', solutionId)
+        return null
       }
-      return null
+
+      const parentProblemNode = useTreeStore()._findNodeById(state.currentSnapshot.roots, parentProblemId)
+      const isSelected = parentProblemNode?.selected_solution_id === solutionId
+
+      // 提取子问题，并转换为ProblemRequest格式
+      const childrenProblems = (solutionNode.children || []).map(child => ({
+        id: child.id,
+        title: child.title,
+        significance: child.significance,
+        criteria: child.criteria,
+        problem_type: child.problem_type
+      }))
+
+      return {
+        id: solutionNode.id,
+        title: solutionNode.title,
+        top_level_thoughts: solutionNode.top_level_thoughts,
+        implementation_plan: solutionNode.implementation_plan,
+        plan_justification: solutionNode.plan_justification,
+        state: solutionNode.state,
+        final_report: solutionNode.final_report,
+        selected: isSelected,
+        children: childrenProblems,
+        parentProblemId: parentProblemId, // 添加父问题ID
+      }
+    },
+
+    /**
+     * 判断节点是否为根研究问题
+     * @param {string} nodeId - 节点ID
+     * @returns {boolean} 是否为根研究问题
+     */
+    getIsRootProblem: (state) => (nodeId) => {
+      if (!nodeId || !state.currentSnapshot) return false
+      
+      // 检查是否在根节点列表中
+      const rootNode = state.currentSnapshot.roots?.find(root => root.id === nodeId)
+      return rootNode && rootNode.type === 'problem'
+    },
+
+    /**
+     * 根据根问题ID获取根问题面板所需数据
+     * @param {string} problemId - 根问题ID，如果为null则返回空数据用于创建
+     * @returns {Object|null} 根问题数据
+     */
+    getRootProblemPanelData: (state) => (problemId) => {
+      if (!state.currentSnapshot) return null
+      
+      if (!problemId) {
+        // 创建模式：返回空数据
+        return {
+          id: null,
+          title: '',
+          significance: '',
+          criteria: '',
+          problem_type: 'implementation' // 根问题默认为实施问题
+        }
+      }
+      
+      const rootNode = state.currentSnapshot.roots?.find(root => root.id === problemId)
+      if (!rootNode || rootNode.type !== 'problem') {
+        return null
+      }
+      
+      return {
+        id: rootNode.id,
+        title: rootNode.title,
+        significance: rootNode.significance,
+        criteria: rootNode.criteria,
+        problem_type: rootNode.problem_type
+      }
+    },
+
+    /**
+     * 判断节点是否启用（只有在被选中的解决方案路径上的节点才被认为是启用的）
+     * @param {string} nodeId - 节点ID
+     * @returns {boolean} 节点是否启用
+     */
+    getIsNodeEnabled: (state) => (nodeId) => {
+      if (!nodeId || !state.currentSnapshot) return false
+      
+      const store = useTreeStore()
+      return store._isNodeInSelectedPath(state.currentSnapshot.roots, nodeId)
     },
 
     /**
@@ -278,6 +425,40 @@ export const useTreeStore = defineStore('tree', {
         }
         if (node.children) {
           const result = this._findNodeById(node.children, targetId)
+          if (result) return result
+        }
+      }
+      return null
+    },
+
+    /**
+     * 根据标题递归查找节点
+     * @param {Array} nodes - 要搜索的节点数组
+     * @param {string} targetTitle - 目标标题
+     * @param {string[]} excludeNodeIds - 排除的节点ID列表
+     * @param {boolean} onlySelectedSolution - 如果为true，则只搜索选中的解决方案及其下级节点
+     * @returns {string|null} 找到的节点ID
+     */
+    _findNodeByTitle(nodes, targetTitle, parrentNode = null, excludeNodeIds = [], onlySelectedSolution = true) {
+      console.log("用标题找节点，排除节点：", excludeNodeIds)
+      for (const node of nodes) {
+        
+        // 如果只搜索选中的解决方案，且当前是解决方案节点，检查是否被选中
+        if (onlySelectedSolution && node.type === "solution") {
+          if (parrentNode.selected_solution_id !== node.id) {
+            continue // 跳过未被选中的解决方案
+          }
+        }
+        
+        if (node.title === targetTitle) {
+          if (!excludeNodeIds.includes(node.id)) {
+              console.log("找到节点：", node.id, node.title)
+              return node.id
+          }
+        }
+        
+        if (node.children) {
+          const result = this._findNodeByTitle(node.children, targetTitle, node, excludeNodeIds, onlySelectedSolution)
           if (result) return result
         }
       }
@@ -454,6 +635,45 @@ export const useTreeStore = defineStore('tree', {
      */
     updateCurrentSnapshot(snapshotData) {
       this.currentSnapshot = snapshotData
+    },
+
+    /**
+     * 判断节点是否在被选中的解决方案路径上
+     * 只有在被选中的解决方案路径上的节点才被认为是启用的
+     * @param {Array} nodes - 要搜索的节点数组
+     * @param {string} targetNodeId - 目标节点ID
+     * @param {boolean} isInSelectedPath - 当前路径是否在被选中的路径上（递归参数）
+     * @returns {boolean} 节点是否在被选中的路径上
+     */
+    _isNodeInSelectedPath(nodes, targetNodeId, isInSelectedPath = true) {
+      for (const node of nodes) {
+        // 如果找到目标节点，返回当前路径状态
+        if (node.id === targetNodeId) {
+          return isInSelectedPath
+        }
+        
+        // 如果当前节点是问题节点且有子节点
+        if (node.type === 'problem' && node.children && node.children.length > 0) {
+          // 对于问题节点，只有被选中的解决方案子节点才在选中路径上
+          for (const child of node.children) {
+            if (child.type === 'solution') {
+              // 检查这个解决方案是否被选中
+              const childIsInSelectedPath = isInSelectedPath && (node.selected_solution_id === child.id)
+              const result = this._isNodeInSelectedPath([child], targetNodeId, childIsInSelectedPath)
+              if (result !== null) return result
+            } else {
+              // 对于非解决方案子节点（如果有的话），保持当前路径状态
+              const result = this._isNodeInSelectedPath([child], targetNodeId, isInSelectedPath)
+              if (result !== null) return result
+            }
+          }
+        } else if (node.children && node.children.length > 0) {
+          // 对于其他类型的节点，保持当前路径状态
+          const result = this._isNodeInSelectedPath(node.children, targetNodeId, isInSelectedPath)
+          if (result !== null) return result
+        }
+      }
+      return null // 没有找到目标节点
     },
 
     /**

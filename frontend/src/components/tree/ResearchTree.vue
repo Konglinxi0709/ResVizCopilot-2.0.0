@@ -5,8 +5,7 @@
     <div class="tree-container">
       <MindElixirWrapper
         :mind-elixir-data="currentMindElixirData"
-        v-model:selected-node-id="localSelectedNodeId"
-        @node-selected="handleNodeSelected"
+        @node-select="handleNodeSelect"
       />
     </div>
 
@@ -38,19 +37,39 @@
       </el-card>
     </div>
 
+    <!-- 解决方案面板 -->
+    <SolutionPanel
+      v-if="shouldShowSolutionPanel"
+      :selected-node-id="selectedNodeId"
+      @close="handleClosePanel"
+    />
+
+    <!-- 根问题面板 -->
+    <RootProblemPanel
+      v-if="shouldShowRootProblemPanel"
+      :selected-node-id="selectedNodeId"
+      @close="handleClosePanel"
+    />
+
   </div>
 </template>
 
 <script>
 import MindElixirWrapper from './MindElixirWrapper.vue'
+import SolutionPanel from './SolutionPanel.vue'
+import RootProblemPanel from './RootProblemPanel.vue'
 import { useTreeStore } from '@/stores/treeStore'
+import { useMessageStore } from '@/stores/messageStore'
 import { Camera, Loading } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 
 export default {
   name: 'ResearchTree',
   
   components: {
     MindElixirWrapper,
+    SolutionPanel,
+    RootProblemPanel,
     Camera,
     Loading
   },
@@ -59,7 +78,9 @@ export default {
   data() {
     return {
       treeStore: null,
-      localSelectedNodeId: null
+      selectedNodeId: null,
+      shouldShowSolutionPanel: false, // 控制解决方案面板显示
+      shouldShowRootProblemPanel: false, // 控制根问题面板显示
     }
   },
   
@@ -80,19 +101,89 @@ export default {
     // 当前使用的Mind-elixir数据
     currentMindElixirData() {
       return this.treeStore?.getDisplaySnapshotData
-    }
+    },
+
   },
 
   async mounted() {
     this.treeStore = useTreeStore()
+    this.messageStore = useMessageStore()
     await this.treeStore.refreshCurrentSnapshot()
   },
   
   methods: {
     // 处理节点选择
-    handleNodeSelected(nodeInfo) {
-      console.log('研究树节点被选中:', nodeInfo)
-      // 直接操作treeStore，无需emit
+    async handleNodeSelect(nodeId) {
+      console.log('研究树节点被选中:', nodeId)
+      
+      // 重置所有面板状态
+      this.shouldShowSolutionPanel = false
+      this.shouldShowRootProblemPanel = false
+      this.selectedNodeId = nodeId
+      
+      // mind-root节点：创建根问题
+      if (nodeId === 'mind-root') {
+        this.shouldShowRootProblemPanel = true
+        return
+      }
+      
+      // 检查是否为根问题节点
+      if (this.treeStore?.getIsRootProblem(nodeId)) {
+        await this.handleRootProblemSelect()
+        return
+      }
+      
+      // 其他节点：检查是否显示解决方案面板
+      this.checkSolutionPanelDisplay(nodeId)
+    },
+
+    // 检查是否显示解决方案面板
+    checkSolutionPanelDisplay(nodeId) {
+      const nodeType = this.treeStore.getNodeType(nodeId)
+      if (nodeType === 'solution') {
+        this.shouldShowSolutionPanel = true
+      } else if (nodeType === 'problem') {
+        const problemType = this.treeStore.getProblemNodeType(nodeId)
+        if (problemType === 'implementation' && this.treeStore.getIsNodeEnabled(nodeId) === true) {
+          this.shouldShowSolutionPanel = true
+        }
+        // 条件问题不显示任何面板
+      }
+    },
+
+    // 处理根问题节点选择
+    async handleRootProblemSelect() {
+      try {
+        // eslint-disable-next-line no-unused-vars
+        const choice = await ElMessageBox.confirm(
+          '请选择您要执行的操作：',
+          '根问题操作',
+          {
+            distinguishCancelAndClose: true,
+            confirmButtonText: '新建解决方案',
+            cancelButtonText: '查看根问题',
+            type: 'info',
+            customClass: 'root-problem-dialog'
+          }
+        )
+        
+        // 用户选择了新建解决方案
+        this.shouldShowSolutionPanel = true
+        
+      } catch (action) {
+        if (action === 'cancel') {
+          // 用户选择了查看根问题
+          this.shouldShowRootProblemPanel = true
+        }
+        // action === 'close' 表示用户关闭了对话框，不做任何操作
+      }
+    },
+
+    // 处理关闭面板
+    handleClosePanel() {
+      this.selectedNodeId = null
+      this.shouldShowSolutionPanel = false
+      this.shouldShowRootProblemPanel = false
     },
 
     // 处理退出快照查看

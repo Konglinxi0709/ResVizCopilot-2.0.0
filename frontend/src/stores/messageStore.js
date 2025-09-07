@@ -227,16 +227,12 @@ export const useMessageStore = defineStore('message', {
 
         console.log('✅ 请求发送成功，开始接收SSE流...')
 
-        // 设置生成状态
-        this.isGenerating = true
-
         // 处理SSE流
         await this._handleSSEStream(response)
 
       } catch (error) {
         console.error('❌ 发送消息失败:', error)
         this.setError(error.message || '发送消息失败')
-        this.isGenerating = false
         throw error
       }
     },
@@ -254,8 +250,6 @@ export const useMessageStore = defineStore('message', {
 
         if (response.status === "success") {
           console.log('✅ 中断请求发送成功')
-          this.isGenerating = false
-          this.currentGeneratingMessageId = null
         } else {
           console.error('❌ 中断请求失败: HTTP', response.status)
         }
@@ -273,6 +267,8 @@ export const useMessageStore = defineStore('message', {
     async _handleSSEStream(response) {
       try {
         console.log('🌊 开始处理SSE流...')
+        // 设置生成状态
+        this.isGenerating = true
 
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
@@ -305,8 +301,6 @@ export const useMessageStore = defineStore('message', {
 
                 if (data === '[DONE]') {
                   console.log('✅ 收到完成标志')
-                  this.isGenerating = false
-                  this.currentGeneratingMessageId = null
                   break
                 }
 
@@ -341,7 +335,6 @@ export const useMessageStore = defineStore('message', {
       } catch (error) {
         console.error('❌ 处理SSE流时出错:', error)
         this.setError('SSE连接错误')
-        this.isGenerating = false
       } finally {
         this.isGenerating = false
         this.currentGeneratingMessageId = null
@@ -356,7 +349,7 @@ export const useMessageStore = defineStore('message', {
      */
     async _handlePatch(patchData) {
       try {
-        console.log('🔄 处理patch数据:', patchData)
+        //console.log('🔄 处理patch数据:', patchData)
 
         // 1. 用patch_data的role和publisher字段判断当前是否为智能体操作
         const treeStore = useTreeStore()
@@ -455,7 +448,6 @@ export const useMessageStore = defineStore('message', {
 
       // 更新生成状态
       if (!patchData.finished) {
-        this.isGenerating = true
         this.currentGeneratingMessageId = message.id
       }
     },
@@ -539,7 +531,6 @@ export const useMessageStore = defineStore('message', {
       // 更新状态
       if (patchData.finished) {
         message.status = 'completed'
-        this.isGenerating = false
         this.currentGeneratingMessageId = null
       }
 
@@ -620,6 +611,203 @@ export const useMessageStore = defineStore('message', {
      */
     async refreshMessages() {
       await this._syncMessages()
+    },
+
+    /**
+     * 创建根问题
+     * @param {Object} problemData - 问题数据（ProblemRequest格式）
+     */
+    async createRootProblem(problemData) {
+      try {
+        this.clearError()
+
+        const response = await apiService.post('/research-tree/problems/root', problemData)
+
+        if (response.success) {
+          // 同步消息和树数据
+          await this._syncMessages()
+          const treeStore = useTreeStore()
+          await treeStore.refreshCurrentSnapshot()
+          return response.data
+        } else {
+          throw new Error(response.message || '创建根问题失败')
+        }
+
+      } catch (error) {
+        console.error('创建根问题失败:', error)
+        this.setError(error.message || '创建根问题失败')
+        throw error
+      }
+    },
+
+    /**
+     * 更新根问题
+     * @param {string} problemId - 问题ID
+     * @param {Object} problemData - 问题数据（ProblemRequest格式）
+     */
+    async updateRootProblem(problemId, problemData) {
+      try {
+        this.clearError()
+
+        const response = await apiService.patch(`/research-tree/problems/root/${problemId}`, problemData)
+
+        if (response.success) {
+          // 同步消息和树数据
+          await this._syncMessages()
+          const treeStore = useTreeStore()
+          await treeStore.refreshCurrentSnapshot()
+          return response.data
+        } else {
+          throw new Error(response.message || '更新根问题失败')
+        }
+
+      } catch (error) {
+        console.error('更新根问题失败:', error)
+        this.setError(error.message || '更新根问题失败')
+        throw error
+      }
+    },
+
+    /**
+     * 删除根问题
+     * @param {string} problemId - 问题ID
+     */
+    async deleteRootProblem(problemId) {
+      try {
+        this.clearError()
+
+        const response = await apiService.delete(`/research-tree/problems/root/${problemId}`)
+
+        if (response.success) {
+          // 同步消息和树数据
+          await this._syncMessages()
+          const treeStore = useTreeStore()
+          await treeStore.refreshCurrentSnapshot()
+          return response.data
+        } else {
+          throw new Error(response.message || '删除根问题失败')
+        }
+
+      } catch (error) {
+        console.error('删除根问题失败:', error)
+        this.setError(error.message || '删除根问题失败')
+        throw error
+      }
+    },
+
+    /**
+     * 创建解决方案
+     * @param {string} problemId - 父问题ID
+     * @param {Object} solutionData - 解决方案数据（SolutionRequest格式）
+     */
+    async createSolution(problemId, solutionData) {
+      try {
+        this.clearError()
+
+        const response = await apiService.post(`/research-tree/problems/${problemId}/solutions`, solutionData)
+
+        if (response.success) {
+          // 同步消息和树数据
+          await this._syncMessages()
+          const treeStore = useTreeStore()
+          await treeStore.refreshCurrentSnapshot()
+          return response.data
+        } else {
+          throw new Error(response.message || '创建解决方案失败')
+        }
+
+      } catch (error) {
+        console.error('创建解决方案失败:', error)
+        this.setError(error.message || '创建解决方案失败')
+        throw error
+      }
+    },
+
+    /**
+     * 更新解决方案
+     * @param {string} solutionId - 解决方案ID
+     * @param {Object} solutionData - 解决方案数据（SolutionRequest格式）
+     */
+    async updateSolution(solutionId, solutionData) {
+      try {
+        this.clearError()
+
+        const response = await apiService.patch(`/research-tree/solutions/${solutionId}`, solutionData)
+
+        if (response.success) {
+          // 同步消息和树数据
+          await this._syncMessages()
+          const treeStore = useTreeStore()
+          await treeStore.refreshCurrentSnapshot()
+          return response.data
+        } else {
+          throw new Error(response.message || '更新解决方案失败')
+        }
+
+      } catch (error) {
+        console.error('更新解决方案失败:', error)
+        this.setError(error.message || '更新解决方案失败')
+        throw error
+      }
+    },
+
+    /**
+     * 删除解决方案
+     * @param {string} solutionId - 解决方案ID
+     */
+    async deleteSolution(solutionId) {
+      try {
+        this.clearError()
+
+        const response = await apiService.delete(`/research-tree/solutions/${solutionId}`)
+
+        if (response.success) {
+          // 同步消息和树数据
+          await this._syncMessages()
+          const treeStore = useTreeStore()
+          await treeStore.refreshCurrentSnapshot()
+          return response.data
+        } else {
+          throw new Error(response.message || '删除解决方案失败')
+        }
+
+      } catch (error) {
+        console.error('删除解决方案失败:', error)
+        this.setError(error.message || '删除解决方案失败')
+        throw error
+      }
+    },
+
+    /**
+     * 设置选中解决方案
+     * @param {string} problemId - 问题ID
+     * @param {string|null} solutionId - 解决方案ID
+     */
+    async setSelectedSolution(problemId, solutionId) {
+      try {
+        this.clearError()
+
+        const requestData = {
+          solution_id: solutionId
+        }
+
+        const response = await apiService.post(`/research-tree/problems/${problemId}/selected-solution`, requestData)
+
+        if (response.success) {
+          // 同步消息和树数据
+          await this._syncMessages()
+          const treeStore = useTreeStore()
+          await treeStore.refreshCurrentSnapshot()
+          return response.data
+        } else {
+          throw new Error(response.message || '设置选中解决方案失败')
+        }
+
+      } catch (error) {
+        console.error('设置选中解决方案失败:', error)
+        this.setError(error.message || '设置选中解决方案失败')
+        throw error
+      }
     },
   }
 })

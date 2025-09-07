@@ -130,12 +130,16 @@ const NODE_STYLE_CONFIG = {
         color: MODERN_COLORS.error[700],
         borderColor: MODERN_COLORS.error[500]
       },
-      deprecated: {
-        background: MODERN_COLORS.neutral[100],
-        color: MODERN_COLORS.neutral[500],
-        borderColor: MODERN_COLORS.neutral[300],
-        opacity: '0.7'
-      }
+    }
+  },
+  
+  // 通用状态样式（适用于所有节点类型）
+  common: {
+    deprecated: {
+      background: MODERN_COLORS.neutral[100],
+      color: MODERN_COLORS.neutral[500],
+      borderColor: MODERN_COLORS.neutral[300],
+      opacity: '0.7'
     }
   }
 }
@@ -153,7 +157,7 @@ const ICON_CONFIG = {
     in_progress: '⏳',
     completed: '✅',
     failed: '❌',
-    deprecated: '📋'
+    deprecated: '🗑️'
   },
   
   special: {
@@ -225,6 +229,9 @@ export class ResearchTreeTransformer {
       },
       children: []
     }
+    
+    // 将快照数据添加到 context 中，供节点启用状态判断使用
+    context.snapshotData = backendSnapshot
     
     // 转换所有根节点为子节点
     backendSnapshot.roots.forEach(root => {
@@ -352,6 +359,17 @@ export class ResearchTreeTransformer {
       baseIcons.push(this.iconConfig.special.snapshot_view)
       baseStyle.opacity = '0.8'
       baseStyle.filter = 'grayscale(0.2)'
+    }
+    
+    // 检查节点是否在选中的解决方案路径上（是否启用）
+    if (context.snapshotData) {
+      const isNodeEnabled = this.isNodeInSelectedPath(context.snapshotData.roots, backendNode.id)
+      if (isNodeEnabled === false) {
+        // 节点被弃用，应用弃用样式
+        Object.assign(baseStyle, this.styleConfig.common.deprecated)
+        baseIcons.push(this.iconConfig.states.deprecated)
+        baseTags.push(...this.tagConfig.states.deprecated)
+      }
     }
     
     // 设置节点属性
@@ -496,5 +514,44 @@ export class ResearchTreeTransformer {
     }
     
     return selectedIds
+  }
+  
+  /**
+   * 判断节点是否在被选中的解决方案路径上
+   * 只有在被选中的解决方案路径上的节点才被认为是启用的
+   * @param {Array} nodes - 要搜索的节点数组
+   * @param {string} targetNodeId - 目标节点ID
+   * @param {boolean} isInSelectedPath - 当前路径是否在被选中的路径上（递归参数）
+   * @returns {boolean} 节点是否在被选中的路径上
+   */
+  isNodeInSelectedPath(nodes, targetNodeId, isInSelectedPath = true) {
+    for (const node of nodes) {
+      // 如果找到目标节点，返回当前路径状态
+      if (node.id === targetNodeId) {
+        return isInSelectedPath
+      }
+      
+      // 如果当前节点是问题节点且有子节点
+      if (node.type === 'problem' && node.children && node.children.length > 0) {
+        // 对于问题节点，只有被选中的解决方案子节点才在选中路径上
+        for (const child of node.children) {
+          if (child.type === 'solution') {
+            // 检查这个解决方案是否被选中
+            const childIsInSelectedPath = isInSelectedPath && (node.selected_solution_id === child.id)
+            const result = this.isNodeInSelectedPath([child], targetNodeId, childIsInSelectedPath)
+            if (result !== null) return result
+          } else {
+            // 对于非解决方案子节点（如果有的话），保持当前路径状态
+            const result = this.isNodeInSelectedPath([child], targetNodeId, isInSelectedPath)
+            if (result !== null) return result
+          }
+        }
+      } else if (node.children && node.children.length > 0) {
+        // 对于其他类型的节点，保持当前路径状态
+        const result = this.isNodeInSelectedPath(node.children, targetNodeId, isInSelectedPath)
+        if (result !== null) return result
+      }
+    }
+    return null // 没有找到目标节点
   }
 }

@@ -130,7 +130,7 @@ class DatabaseManager:
         return self.snapshot_map[self.current_snapshot_id]
 
     # ---------------- 内部工具：查找/拷贝/提交 ----------------
-    def _clone_node(self, node: Node) -> Node:
+    def _clone_node(self, node: Node, new_id = False) -> Node:
         """深拷贝任意节点（Problem/Solution），递归复制 children，生成新ID的克隆或保留原ID？
 
         注意：为保持"快照版本之间可以对比同一节点"的能力，这里保留原ID。
@@ -138,7 +138,7 @@ class DatabaseManager:
         """
         if isinstance(node, ProblemNode):
             cloned = ProblemNode(
-                id=node.id,
+                id=node.id if not new_id else str(uuid4()),
                 title=node.title,
                 problem_type=node.problem_type,
                 significance=node.significance,
@@ -149,7 +149,7 @@ class DatabaseManager:
         else:
             assert isinstance(node, SolutionNode)
             cloned = SolutionNode(
-                id=node.id,
+                id=node.id if not new_id else str(uuid4()),
                 title=node.title,
                 top_level_thoughts=node.top_level_thoughts,
                 plan_justification=node.plan_justification,
@@ -158,12 +158,12 @@ class DatabaseManager:
                 final_report=node.final_report,
                 children=[],
             )
-        cloned.children = [self._clone_node(c) for c in node.children]
+        cloned.children = [self._clone_node(c, new_id) for c in node.children]
         return cloned
 
-    def _clone_roots(self, roots: List[Node]) -> List[Node]:
+    def _clone_roots(self, roots: List[Node], new_id = False) -> List[Node]:
         """深拷贝根节点列表（及其整棵子树）。"""
-        return [self._clone_node(r) for r in roots]
+        return [self._clone_node(r, new_id) for r in roots]
 
     def _find_node_in(self, nodes: List[Node], node_id: str) -> Optional[Node]:
         for n in nodes:
@@ -213,7 +213,7 @@ class DatabaseManager:
         if new_problem.id is not None:
             node = self._find_node_in(self.get_current_snapshot().roots, new_problem.id)
             if isinstance(node, ProblemNode):
-                return self._clone_node(node)
+                return self._clone_node(node, new_id=True)
         return ProblemNode(
             id=str(uuid4()), 
             title=new_problem.title, 
@@ -402,13 +402,14 @@ class DatabaseManager:
         return {"tree_text": "\n".join(lines)}
 
     @query_decorator
-    def get_node_id_by_title_query(self, title: str, node_type: Optional[NodeType] = None) -> Dict:
+    def get_node_id_by_title_query(self, title: str, node_type: Optional[NodeType] = None, only_selected_solution: bool = True) -> Dict:
         """
         根据标题查找节点查询
         
         Args:
             title: 节点标题
             node_type: 可选的节点类型过滤
+            only_selected_solution: 如果为真，当节点为实施问题时仅递归其选中解决方案
             
         Returns:
             找到的节点，如果不存在返回None
@@ -418,10 +419,21 @@ class DatabaseManager:
                 if node.title == title:
                     if node_type is None or node.type == node_type:
                         return node
-                # 递归搜索子节点
-                result = search_in_nodes(node.children)
-                if result:
-                    return result
+                
+                # 处理only_selected_solution为真且节点为实施问题的情况
+                if only_selected_solution and isinstance(node, ProblemNode) and node.problem_type == ProblemType.IMPLEMENTATION:
+                    if node.selected_solution_id:
+                        # 仅递归选中解决方案
+                        selected_solution = next((c for c in node.children if c.id == node.selected_solution_id), None)
+                        if selected_solution:
+                            result = search_in_nodes([selected_solution])
+                            if result:
+                                return result
+                else:
+                    # 正常递归所有子节点
+                    result = search_in_nodes(node.children)
+                    if result:
+                        return result
             return None
         
         node = search_in_nodes(self.get_current_snapshot().roots)
@@ -455,7 +467,7 @@ class DatabaseManager:
             return {"children_ids": [c.id for c in node.children]}
 
     @query_decorator
-    def get_solution_children_request_map_by_title_query(self, solution_id: str) -> Dict:
+    def get_solution_children_request_map_by_id_query(self, solution_id: str) -> Dict:
         """获取解决方案子问题列表查询"""
         node = self._find_node_in(self.get_current_snapshot().roots, solution_id)
         if not isinstance(node, SolutionNode):

@@ -265,8 +265,8 @@ export default {
         console.log("触发项目变更处理！！！")
         await this.loadCurrentProject()
         // 同步消息历史，确保切换工程后右侧面板立即更新
-        await this.messageStore.refreshMessages()
         await this.treeStore.refreshCurrentSnapshot()
+        await this.messageStore.refreshMessages()
         ElMessage.success('项目切换成功')
       } catch (error) {
         console.error('项目切换失败:', error)
