@@ -130,26 +130,46 @@ class DatabaseManager:
         return self.snapshot_map[self.current_snapshot_id]
 
     # ---------------- 内部工具：查找/拷贝/提交 ----------------
-    def _clone_node(self, node: Node, new_id = False) -> Node:
+    def _clone_node(self, node: Node, new_id = None) -> Node:
         """深拷贝任意节点（Problem/Solution），递归复制 children，生成新ID的克隆或保留原ID？
 
         注意：为保持"快照版本之间可以对比同一节点"的能力，这里保留原ID。
         只有在业务上需要"派生新节点"（如 fork 子树）时才创建新ID。
         """
         if isinstance(node, ProblemNode):
-            cloned = ProblemNode(
-                id=node.id if not new_id else str(uuid4()),
-                title=node.title,
-                problem_type=node.problem_type,
-                significance=node.significance,
-                criteria=node.criteria,
-                selected_solution_id=node.selected_solution_id,
-                children=[],
-            )
+            if new_id is None:
+                cloned = ProblemNode(
+                    id=node.id,
+                    title=node.title,
+                    problem_type=node.problem_type,
+                    significance=node.significance,
+                    criteria=node.criteria,
+                    selected_solution_id=node.selected_solution_id,
+                    children=[],
+                )
+                cloned.children = [self._clone_node(c) for c in node.children]
+            else:
+                old_selected_solution_id = node.selected_solution_id
+                new_selected_solution_id = str(uuid4())
+                cloned = ProblemNode(
+                    id=new_id,
+                    title=node.title,
+                    problem_type=node.problem_type,
+                    significance=node.significance,
+                    criteria=node.criteria,
+                    selected_solution_id=new_selected_solution_id,
+                    children=[],
+                )
+                for child in node.children:
+                    if child.id == old_selected_solution_id:
+                        new_child_id = new_selected_solution_id
+                    else:
+                        new_child_id = str(uuid4())
+                    cloned.children.append(self._clone_node(child, new_child_id))
         else:
             assert isinstance(node, SolutionNode)
             cloned = SolutionNode(
-                id=node.id if not new_id else str(uuid4()),
+                id=node.id if not new_id else new_id,
                 title=node.title,
                 top_level_thoughts=node.top_level_thoughts,
                 plan_justification=node.plan_justification,
@@ -158,12 +178,18 @@ class DatabaseManager:
                 final_report=node.final_report,
                 children=[],
             )
-        cloned.children = [self._clone_node(c, new_id) for c in node.children]
+            if new_id is None:
+                cloned.children = [self._clone_node(c) for c in node.children]
+            else:
+                cloned.children = [self._clone_node(c, str(uuid4())) for c in node.children]
         return cloned
 
-    def _clone_roots(self, roots: List[Node], new_id = False) -> List[Node]:
+    def _clone_roots(self, roots: List[Node], use_new_id = False) -> List[Node]:
         """深拷贝根节点列表（及其整棵子树）。"""
-        return [self._clone_node(r, new_id) for r in roots]
+        if use_new_id:
+            return [self._clone_node(r, str(uuid4())) for r in roots]
+        else:
+            return [self._clone_node(r) for r in roots]
 
     def _find_node_in(self, nodes: List[Node], node_id: str) -> Optional[Node]:
         for n in nodes:
@@ -213,7 +239,7 @@ class DatabaseManager:
         if new_problem.id is not None:
             node = self._find_node_in(self.get_current_snapshot().roots, new_problem.id)
             if isinstance(node, ProblemNode):
-                return self._clone_node(node, new_id=True)
+                return self._clone_node(node, new_id=str(uuid4()))
         return ProblemNode(
             id=str(uuid4()), 
             title=new_problem.title, 
