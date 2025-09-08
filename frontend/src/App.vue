@@ -5,6 +5,7 @@
       :current-project="getCurrentProject"
       @language-change="handleLanguageChange"
       @theme-change="handleThemeChange"
+      @project-changed="handleProjectChanged"
     />
 
     <!-- 主体内容区域 -->

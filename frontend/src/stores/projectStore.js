@@ -159,6 +159,7 @@ export const useProjectStore = defineStore('project', {
      * 调用/projects?project_name=接口，之后同步projectStore
      */
     async createProject(projectName) {
+      console.log("正在创建工程：", projectName)
       try {
         this.clearError()
 

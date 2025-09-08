@@ -418,8 +418,7 @@ export default {
     // 消息输入是否禁用
     isMessageInputDisabled() {
       // 如果当前节点没有ID，或者节点未启用，则禁用消息输入
-      if (!this.currentData.id) return true;
-      return this.treeStore?.getIsNodeEnabled(this.currentData.id) !== true;
+      return !this.currentData.id || !this.canEdit;
     }
   },
 

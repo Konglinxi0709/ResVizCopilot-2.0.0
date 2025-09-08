@@ -32,19 +32,18 @@ export const useTreeStore = defineStore('tree', {
       // 获取要显示的数据源
       let snapshotData = null
       let isSnapshotView = false
-
-      if (state.tempSnapshotData && Object.keys(state.tempSnapshotData).length > 0) {
+      if (state.tempSnapshotData !== null && Object.prototype.hasOwnProperty.call(state.tempSnapshotData, 'roots')) {
         // 如果正在查看临时快照，使用临时快照数据
         snapshotData = state.tempSnapshotData
         isSnapshotView = true
-      } else if (state.currentSnapshot && Object.keys(state.currentSnapshot).length > 0) {
+      } else if (state.currentSnapshot !== null && Object.prototype.hasOwnProperty.call(state.currentSnapshot, 'roots')) {
         // 否则使用当前快照数据
         snapshotData = state.currentSnapshot
         isSnapshotView = false
       }
 
-      // 如果没有快照数据，返回null
-      if (!snapshotData || !snapshotData.roots || snapshotData.roots.length === 0) {
+      // 如果没有快照数据或快照数据缺少roots属性，返回null
+      if (snapshotData === null || !Object.prototype.hasOwnProperty.call(snapshotData, 'roots')) {
         const store = useTreeStore()
         store._syncCurrentSnapshot()
         return null
@@ -52,6 +51,7 @@ export const useTreeStore = defineStore('tree', {
 
       // 使用transformer重新生成mindElixirData
       try {
+        console.log('开始生成Mind-elixir数据', snapshotData)
         const transformer = new ResearchTreeTransformer()
         const context = {
           isSnapshotView: isSnapshotView,
@@ -743,6 +743,17 @@ export const useTreeStore = defineStore('tree', {
      */
     async refreshCurrentSnapshot() {
       await this._syncCurrentSnapshot()
+    },
+
+    /**
+     * 检查并同步当前快照
+     * 如果当前快照为空或缺少roots属性，则强制同步当前快照
+     */
+    async checkAndSyncSnapshot() {
+      if (this.currentSnapshot === null || !Object.prototype.hasOwnProperty.call(this.currentSnapshot, 'roots')) {
+        console.log('当前快照为空或无效，正在同步...')
+        await this.refreshCurrentSnapshot()
+      }
     },
   }
 })

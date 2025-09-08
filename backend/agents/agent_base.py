@@ -397,7 +397,7 @@ class AgentBase(ABC):
             await self.publish_callback(error_patch)
             raise
     
-    async def _publish_action_start_patch(self, action_type: str, publisher: str) -> str:
+    async def _publish_action_start_patch(self, action_type: str, publisher: str, visible_node_ids: List[str] = ["-"]) -> str:
         """
         发布行动开始patch
         
@@ -411,7 +411,8 @@ class AgentBase(ABC):
             message_id=None,  # 创建新消息
             role="assistant",  # 明确指定为智能体消息
             title=f"正在进行 {action_type}",
-            publisher=publisher
+            publisher=publisher,
+            visible_node_ids=visible_node_ids,
         )
         
         message_id = await self.publish_callback(start_patch)

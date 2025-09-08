@@ -146,11 +146,29 @@ export default {
       return `对于你方案中的子问题「${this.currentData.problemTitle}」:\n`
     },
 
+    // 是否可以编辑
+    canEdit() {
+      // 如果正在查看快照，不能编辑
+      if (this.treeStore?.getIsViewingSnapshot) {
+        return false
+      }
+      
+      // 如果智能体正在操作，不能编辑
+      if (this.treeStore?.getAgentOperatingNodeId) {
+        return false
+      }
+
+      // 弃用节点不能编辑
+      if (this.currentData.id && this.treeStore?.getIsNodeEnabled(this.currentData.id) !== true) {
+        return false
+      }
+      
+      return true
+    },
     // 消息输入是否禁用
     isMessageInputDisabled() {
       // 如果当前节点没有父解决方案ID，或者节点未启用，则禁用消息输入
-      if (!this.currentData.parentSolutionId) return true;
-      return this.treeStore?.getIsNodeEnabled(this.currentData.id) !== true;
+      return !this.currentData.parentSolutionId || !this.canEdit;
     }
   },
 

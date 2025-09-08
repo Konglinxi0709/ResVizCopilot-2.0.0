@@ -208,10 +208,10 @@ export class ResearchTreeTransformer {
     console.log('📊 后端快照数据:', backendSnapshot)
     console.log('🎨 转换上下文:', context)
     
-    if (!backendSnapshot || !backendSnapshot.roots || backendSnapshot.roots.length === 0) {
-      console.warn('⚠️ 后端数据为空，使用空数据模板')
-      return this.createEmptyMindMap()
-    }
+    //if (!backendSnapshot || !backendSnapshot.roots || backendSnapshot.roots.length === 0) {
+    //  console.warn('⚠️ 后端数据为空，使用空数据模板')
+    //  return this.createEmptyMindMap()
+    //}
     
     // 创建根节点作为Mind-elixir的根
     const rootNode = {

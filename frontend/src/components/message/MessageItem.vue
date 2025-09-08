@@ -136,13 +136,13 @@
 
       
       <!-- 可见节点信息 -->
-      <div 
-        v-if="hasVisibleNodes && !titleCollapsed" 
+      <div
+        v-if="hasVisibleNodes"
         class="visible-nodes"
       >
         <div class="nodes-info">
           <el-icon><View /></el-icon>
-          <span>可见节点: {{ message.visible_node_ids.length }} 个</span>
+          <span>{{ visibleNodesText }}</span>
         </div>
       </div>
     </div>
@@ -232,9 +232,27 @@ export default {
       return !!this.message.snapshot_id
     },
     
-    // 是否有可见节点
+    // 是否显示可见节点信息
     hasVisibleNodes() {
-      return this.message.visible_node_ids && this.message.visible_node_ids.length > 0
+      return !this.titleCollapsed
+    },
+
+    // 可见节点显示文本
+    visibleNodesText() {
+      const nodeIds = this.message.visible_node_ids
+
+      // 如果不存在或为空数组，显示"全局可见"
+      if (!nodeIds || nodeIds.length === 0) {
+        return '全局可见'
+      }
+
+      // 如果包含"-"，显示"仅用户可见"
+      if (nodeIds.includes('-')) {
+        return '仅用户可见'
+      }
+
+      // 其他情况显示节点数量
+      return `可见节点: ${nodeIds.length} 个`
     }
   },
   

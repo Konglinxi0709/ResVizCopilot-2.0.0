@@ -269,7 +269,8 @@ export const useMessageStore = defineStore('message', {
         console.log('🌊 开始处理SSE流...')
         // 设置生成状态
         this.isGenerating = true
-
+        const treeStore = useTreeStore()
+        await treeStore.checkAndSyncSnapshot()
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
@@ -354,13 +355,18 @@ export const useMessageStore = defineStore('message', {
         // 1. 用patch_data的role和publisher字段判断当前是否为智能体操作
         const treeStore = useTreeStore()
         let nodeId = null
-
-        if (patchData.role === 'assistant' && patchData.publisher) {
-          nodeId = patchData.publisher
-        } else if (patchData.role === 'assistant' && !patchData.publisher) {
-          nodeId = "-"
-        } else if (patchData.role === 'user') {
+        const messageId = patchData.message_id
+        const messageData = this.messages.find(msg => msg.id === messageId)
+        if (!messageData) {
           nodeId = null
+        } else {
+          if (messageData.role === 'assistant' && messageData.publisher) {
+            nodeId = messageData.publisher
+          } else if (messageData.role === 'assistant' && !messageData.publisher) {
+            nodeId = "-"
+          } else if (messageData.role === 'user') {
+            nodeId = null
+          }
         }
 
         if (nodeId) {
@@ -374,7 +380,6 @@ export const useMessageStore = defineStore('message', {
 
         // 3. 如果patch_data的rollback字段不为空且为true，执行回溯操作
         if (patchData.rollback === true) {
-          const messageId = patchData.message_id
           if (!messageId) {
             console.error('❌ 回溯操作必须指定message_id')
             return
@@ -384,7 +389,6 @@ export const useMessageStore = defineStore('message', {
         }
 
         // 4. 处理消息更新
-        const messageId = patchData.message_id
 
         if (messageId === "-") {
           // 更新所有正在生成的消息

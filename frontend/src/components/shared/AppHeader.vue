@@ -137,7 +137,7 @@ export default {
     }
   },
   
-  emits: ['language-change', 'theme-change'],
+  emits: ['language-change', 'theme-change', 'project-changed'],
   
   data() {
     return {
@@ -146,7 +146,6 @@ export default {
       showCreateDialog: false,
       isCreating: false,
       isSaving: false,
-      createFormRef: null,
       createForm: {
         name: ''
       },
@@ -156,7 +155,7 @@ export default {
           { min: 1, max: 50, message: '工程名称长度在 1 到 50 个字符', trigger: 'blur' },
           {
             validator: (rule, value, callback) => {
-              if (this.projectStore?.isProjectNameExists(value)) {
+              if (this.projectStore?.getIsProjectNameExists(value)) {
                 callback(new Error('工程名称已存在'))
               } else {
                 callback()
@@ -199,21 +198,25 @@ export default {
     async handleCreateProject() {
       this.showCreateDialog = true
       this.createForm.name = ''
-      
+
       // 等待对话框打开后聚焦输入框
       this.$nextTick(() => {
-        if (this.createFormRef) {
-          this.createFormRef.focus()
+        if (this.$refs.createFormRef) {
+          // 获取表单中的第一个输入框并聚焦
+          const input = this.$refs.createFormRef.$el.querySelector('input')
+          if (input) {
+            input.focus()
+          }
         }
       })
     },
     
     // 确认创建工程
     async confirmCreateProject() {
-      if (!this.createFormRef) return
-      
+      if (!this.$refs.createFormRef) return
+
       try {
-        await this.createFormRef.validate()
+        await this.$refs.createFormRef.validate()
         
         this.isCreating = true
         await this.projectStore.createProject(this.createForm.name)
@@ -221,6 +224,9 @@ export default {
         ElMessage.success(`工程 "${this.createForm.name}" 创建成功`)
         this.showCreateDialog = false
         this.createForm.name = ''
+
+        // 触发项目变更事件，通知父组件刷新数据
+        this.$emit('project-changed')
       } catch (error) {
         console.error('创建工程失败:', error)
         ElMessage.error('创建工程失败')

@@ -1,0 +1,58 @@
+{
+  "project_name": "系统修改后第一个测试",
+  "created_at": "2025-09-08T10:50:06.027401",
+  "updated_at": "2025-09-08T10:52:08.527695",
+  "messages": {
+    "7c58e225-45f8-4d1d-94db-04b052f47950": {
+      "id": "7c58e225-45f8-4d1d-94db-04b052f47950",
+      "role": "user",
+      "publisher": null,
+      "status": "completed",
+      "title": "操作成功: add_root_problem",
+      "thinking": "",
+      "content": "操作类型: add_root_problem\n参数: {'new_problem': ProblemRequest(id=None, title='周扫红外搜索系统对空中小目标（飞机、导弹、无人机）的检测与告警技术', significance='', criteria='', problem_type=<ProblemType.IMPLEMENTATION: 'implementation'>)}\n结果: 操作成功: add_root_problem",
+      "action_title": "add_root_problem",
+      "action_params": {
+        "new_problem": {
+          "id": null,
+          "title": "周扫红外搜索系统对空中小目标（飞机、导弹、无人机）的检测与告警技术",
+          "significance": "",
+          "criteria": "",
+          "problem_type": "implementation"
+        }
+      },
+      "snapshot_id": "8015647c-dd04-4cb0-a670-a4348663e8d8",
+      "visible_node_ids": [],
+      "created_at": "2025-09-08T10:50:11.683808",
+      "updated_at": "2025-09-08T10:50:11.683833"
+    }
+  },
+  "message_order": [
+    "7c58e225-45f8-4d1d-94db-04b052f47950"
+  ],
+  "snapshot_map": {
+    "5aceb3b7-ffcf-42c7-87f9-7fea0ce74aa9": {
+      "id": "5aceb3b7-ffcf-42c7-87f9-7fea0ce74aa9",
+      "created_at": "2025-09-08T02:50:06.027396",
+      "roots": []
+    },
+    "8015647c-dd04-4cb0-a670-a4348663e8d8": {
+      "id": "8015647c-dd04-4cb0-a670-a4348663e8d8",
+      "created_at": "2025-09-08T02:50:11.683755",
+      "roots": [
+        {
+          "id": "ef4a92d6-844a-4b49-b007-701fa9f677b9",
+          "type": "problem",
+          "title": "周扫红外搜索系统对空中小目标（飞机、导弹、无人机）的检测与告警技术",
+          "created_at": "2025-09-08T02:50:11.683745",
+          "problem_type": "implementation",
+          "selected_solution_id": null,
+          "significance": "",
+          "criteria": "",
+          "children": []
+        }
+      ]
+    }
+  },
+  "current_snapshot_id": "8015647c-dd04-4cb0-a670-a4348663e8d8"
+}
