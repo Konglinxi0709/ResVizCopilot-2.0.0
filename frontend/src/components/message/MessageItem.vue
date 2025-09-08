@@ -16,8 +16,8 @@
           v-if="isGenerating" 
           type="warning" 
           size="small"
-          :icon="Loading"
         >
+          <el-icon><Loading /></el-icon>
           生成中...
         </el-tag>
         <el-tag 
@@ -52,28 +52,28 @@
               <el-dropdown-item 
                 v-if="hasSnapshot" 
                 command="view-snapshot"
-                :icon="Camera"
               >
+                <el-icon><Camera /></el-icon>
                 查看快照
               </el-dropdown-item>
               <el-dropdown-item 
                 command="copy-content"
-                :icon="CopyDocument"
               >
+                <el-icon><CopyDocument /></el-icon>
                 复制内容
               </el-dropdown-item>
               <el-dropdown-item 
                 command="rollback"
-                :icon="RefreshLeft"
                 divided
               >
+                <el-icon><RefreshLeft /></el-icon>
                 回溯到此消息
               </el-dropdown-item>
               <el-dropdown-item 
                 v-if="isGenerating"
                 command="stop"
-                :icon="VideoPause"
               >
+                <el-icon><VideoPause /></el-icon>
                 停止生成
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -154,7 +154,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   More,
   ArrowDown, ArrowUp,
-  View
+  View, Loading, Camera, CopyDocument, RefreshLeft, VideoPause
 } from '@element-plus/icons-vue'
 import MarkdownRenderer from './MarkdownRenderer.vue'
 import dayjs from 'dayjs'
@@ -166,7 +166,12 @@ export default {
     MarkdownRenderer,
     More,
     ArrowDown, ArrowUp,
-    View
+    View,
+    Loading,
+    Camera,
+    CopyDocument,
+    RefreshLeft,
+    VideoPause
   },
   
   props: {
@@ -461,6 +466,7 @@ export default {
 /* 消息内容 */
 .message-content {
   padding: 0;
+  background: var(--bg-color-light, #f8f9fa);
 }
 
 /* 消息标题 */

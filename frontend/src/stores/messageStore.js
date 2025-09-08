@@ -177,7 +177,7 @@ export const useMessageStore = defineStore('message', {
         console.log('🔄 连接到继续传输接口:', incompleteMessageId)
 
         // 调用继续传输接口
-        const response = await fetch(`${process.env.VUE_APP_API_BASE_URL || 'http://127.0.0.1:8008'}/agents/messages/continue/${incompleteMessageId}`, {
+        const response = await fetch(`${process.env.VUE_APP_API_BASE_URL || '/api'}/agents/messages/continue/${incompleteMessageId}`, {
           method: 'GET',
           headers: {
             'Accept': 'text/event-stream'
@@ -213,7 +213,7 @@ export const useMessageStore = defineStore('message', {
         console.log('📤 发送智能体消息:', requestData)
 
         // 发送POST请求启动智能体
-        const response = await fetch(`${process.env.VUE_APP_API_BASE_URL || 'http://127.0.0.1:8008'}/agents/messages`, {
+        const response = await fetch(`${process.env.VUE_APP_API_BASE_URL || '/api'}/agents/messages`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -228,7 +228,7 @@ export const useMessageStore = defineStore('message', {
         console.log('✅ 请求发送成功，开始接收SSE流...')
 
         // 处理SSE流
-        await this._handleSSEStream(response)
+        this._handleSSEStream(response) // 不再等待SSE流处理完成，让其在后台异步进行
 
       } catch (error) {
         console.error('❌ 发送消息失败:', error)

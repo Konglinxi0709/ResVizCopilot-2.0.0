@@ -4,247 +4,273 @@
     <div class="overlay" @click.self="handleClose"></div>
     <!-- 面板主体 -->
     <div class="solution-panel">
-    <!-- 头部 -->
-    <div class="panel-header">
-      <!-- 标题部分 -->
-      <div class="header-title">
-        <!-- 编辑模式：标题输入框 -->
+      <!-- 头部 -->
+      <div class="panel-header">
+        <!-- 标题部分 -->
+        <div class="header-title">
+          <!-- 编辑模式：标题输入框 -->
+          <el-input
+            v-if="isEditing"
+            v-model="localData.title"
+            placeholder="请输入解决方案标题"
+            class="title-input"
+            size="large"
+          />
+          <!-- 展示模式：标题文本 -->
+          <h2 v-else class="title-text">
+            {{ currentData.title || '新建解决方案' }}
+          </h2>
+        </div>
+
+        <!-- 状态和操作区域 -->
+        <div class="header-actions">
+          <!-- 状态显示 -->
+          <div class="status-section">
+            <el-tag 
+              :type="getStatusTagType(currentData.state)" 
+              size="large"
+              class="status-tag"
+            >
+              {{ getStatusText(currentData.state) }}
+            </el-tag>
+
+            <!-- 编辑状态指示器 -->
+            <el-tag 
+              v-if="isEditing"
+              :type="isCreateMode ? 'warning' : 'success'"
+              size="large"
+              class="edit-mode-tag"
+            >
+              {{ isCreateMode ? '新建中' : '编辑中' }}
+            </el-tag>
+          </div>
+
+          <!-- 选中开关 -->
+          <div class="selection-section" v-if="!isEditing && !isCreateSolution">
+            <el-switch
+              v-model="localSelected"
+              @change="handleSelectionChange"
+              active-text="已选中"
+              inactive-text="未选中"
+              :disabled="isEditing"
+            />
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="action-buttons">
+            <!-- 编辑模式按钮 -->
+            <template v-if="isEditing">
+              <el-button 
+                type="primary" 
+                @click="handleSave"
+                :loading="isSaving"
+              >
+                保存
+              </el-button>
+              <el-button @click="handleCancel">
+                取消
+              </el-button>
+            </template>
+
+            <!-- 展示模式按钮 -->
+            <template v-else>
+              <el-button 
+                v-if="!isCreateSolution"
+                type="danger" 
+                @click="handleDelete"
+                :disabled="!canEdit"
+                :loading="isDeleting"
+              >
+                删除
+              </el-button>
+              <el-button 
+                type="primary" 
+                @click="handleEdit"
+                :disabled="!canEdit"
+              >
+                编辑
+              </el-button>
+              <el-button @click="handleClose">
+                关闭
+              </el-button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主内容区域 -->
+      <div class="panel-content">
+        <!-- 顶层思路 -->
+        <div class="content-column">
+          <div class="column-header">顶层思路</div>
+          <div class="column-content">
+            <!-- 编辑模式 -->
+            <el-input
+              v-if="isEditing"
+              v-model="localData.top_level_thoughts"
+              type="textarea"
+              :rows="12"
+              placeholder="请描述顶层思路"
+              class="content-textarea"
+            />
+            <!-- 展示模式 -->
+            <MarkdownRenderer
+              v-else
+              :content="currentData.top_level_thoughts || ''"
+              class="content-markdown"
+            />
+          </div>
+        </div>
+
+        <!-- 研究计划（子问题列表） -->
+        <div class="content-column research-plan-column">
+          <div class="column-header">研究计划</div>
+          <div class="column-content">
+            <!-- 条件问题列表 -->
+            <div class="problem-list-section">
+              <div class="problem-list-header">
+                <span class="section-title">条件问题</span>
+                <el-button
+                  v-if="isEditing"
+                  size="small"
+                  type="primary"
+                  @click="addConditionalProblem"
+                >
+                  <el-icon><Plus /></el-icon>
+                  添加条件问题
+                </el-button>
+              </div>
+              <div class="problem-list">
+                <ProblemElement
+                  v-for="(problem, index) in conditionalProblems"
+                  :key="problem.id || `conditional-${index}`"
+                  :problem-data="problem"
+                  :is-editable="isEditing"
+                  :can-move-up="index > 0"
+                  :can-move-down="index < conditionalProblems.length - 1"
+                  @save="handleProblemSave(problem, $event)"
+                  @move-up="handleProblemMoveUp(problem, 'conditional')"
+                  @move-down="handleProblemMoveDown(problem, 'conditional')"
+                  @delete="handleProblemDelete(problem, 'conditional')"
+                />
+                <div v-if="conditionalProblems.length === 0" class="empty-list">
+                  暂无条件问题
+                </div>
+              </div>
+            </div>
+
+            <!-- 实施问题列表 -->
+            <div class="problem-list-section">
+              <div class="problem-list-header">
+                <span class="section-title">实施问题</span>
+                <el-button
+                  v-if="isEditing"
+                  size="small"
+                  type="primary"
+                  @click="addImplementationProblem"
+                >
+                  <el-icon><Plus /></el-icon>
+                  添加实施问题
+                </el-button>
+              </div>
+              <div class="problem-list">
+                <ProblemElement
+                  v-for="(problem, index) in implementationProblems"
+                  :key="problem.id || `implementation-${index}`"
+                  :problem-data="problem"
+                  :is-editable="isEditing"
+                  :can-move-up="index > 0"
+                  :can-move-down="index < implementationProblems.length - 1"
+                  @save="handleProblemSave(problem, $event)"
+                  @move-up="handleProblemMoveUp(problem, 'implementation')"
+                  @move-down="handleProblemMoveDown(problem, 'implementation')"
+                  @delete="handleProblemDelete(problem, 'implementation')"
+                />
+                <div v-if="implementationProblems.length === 0" class="empty-list">
+                  暂无实施问题
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 收尾工作计划 -->
+        <div class="content-column">
+          <div class="column-header">收尾工作计划</div>
+          <div class="column-content">
+            <!-- 编辑模式 -->
+            <el-input
+              v-if="isEditing"
+              v-model="localData.implementation_plan"
+              type="textarea"
+              :rows="12"
+              placeholder="请描述收尾工作计划"
+              class="content-textarea"
+            />
+            <!-- 展示模式 -->
+            <MarkdownRenderer
+              v-else
+              :content="currentData.implementation_plan || ''"
+              class="content-markdown"
+            />
+          </div>
+        </div>
+
+        <!-- 可行性论证 -->
+        <div class="content-column">
+          <div class="column-header">可行性论证</div>
+          <div class="column-content">
+            <!-- 编辑模式 -->
+            <el-input
+              v-if="isEditing"
+              v-model="localData.plan_justification"
+              type="textarea"
+              :rows="12"
+              placeholder="请描述可行性论证"
+              class="content-textarea"
+            />
+            <!-- 展示模式 -->
+            <MarkdownRenderer
+              v-else
+              :content="currentData.plan_justification || ''"
+              class="content-markdown"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 消息输入区域 -->
+      <div 
+        v-if="!isEditing" 
+        class="message-input-area"
+      >
         <el-input
-          v-if="isEditing"
-          v-model="localData.title"
-          placeholder="请输入解决方案标题"
-          class="title-input"
-          size="large"
-        />
-        <!-- 展示模式：标题文本 -->
-        <h2 v-else class="title-text">
-          {{ currentData.title || '新建解决方案' }}
-        </h2>
-      </div>
-
-      <!-- 状态和操作区域 -->
-      <div class="header-actions">
-        <!-- 状态显示 -->
-        <div class="status-section">
-          <el-tag 
-            :type="getStatusTagType(currentData.state)" 
-            size="large"
-            class="status-tag"
-          >
-            {{ getStatusText(currentData.state) }}
-          </el-tag>
-          
-          <!-- 编辑状态指示器 -->
-          <el-tag 
-            v-if="isEditing"
-            :type="isCreateMode ? 'warning' : 'success'"
-            size="large"
-            class="edit-mode-tag"
-          >
-            {{ isCreateMode ? '新建中' : '编辑中' }}
-          </el-tag>
-        </div>
-
-        <!-- 选中开关 -->
-        <div class="selection-section" v-if="!isEditing && !isCreateSolution">
-          <el-switch
-            v-model="localSelected"
-            @change="handleSelectionChange"
-            active-text="已选中"
-            inactive-text="未选中"
-            :disabled="isEditing"
-          />
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="action-buttons">
-          <!-- 编辑模式按钮 -->
-          <template v-if="isEditing">
+          v-model="messageContent"
+          :placeholder="messagePlaceholder"
+          @keyup.enter="handleSendMessage"
+          :disabled="isSendingMessage || isMessageInputDisabled"
+          class="chat-input"
+        >
+          <template #append>
             <el-button 
               type="primary" 
-              @click="handleSave"
-              :loading="isSaving"
+              circle 
+              @click="handleSendMessage"
+              :loading="isSendingMessage"
+              :disabled="!messageContent.trim() || isMessageInputDisabled"
             >
-              保存
-            </el-button>
-            <el-button @click="handleCancel">
-              取消
+              <el-icon><ChatSquare /></el-icon>
             </el-button>
           </template>
-          
-          <!-- 展示模式按钮 -->
-          <template v-else>
-            <el-button 
-              v-if="!isCreateSolution"
-              type="danger" 
-              @click="handleDelete"
-              :disabled="!canEdit"
-              :loading="isDeleting"
-            >
-              删除
-            </el-button>
-            <el-button 
-              type="primary" 
-              @click="handleEdit"
-              :disabled="!canEdit"
-            >
-              编辑
-            </el-button>
-            <el-button @click="handleClose">
-              关闭
-            </el-button>
-          </template>
-        </div>
+        </el-input>
       </div>
-    </div>
-
-    <!-- 主内容区域 -->
-    <div class="panel-content">
-      <!-- 顶层思路 -->
-      <div class="content-column">
-        <div class="column-header">顶层思路</div>
-        <div class="column-content">
-          <!-- 编辑模式 -->
-          <el-input
-            v-if="isEditing"
-            v-model="localData.top_level_thoughts"
-            type="textarea"
-            :rows="12"
-            placeholder="请描述顶层思路"
-            class="content-textarea"
-          />
-          <!-- 展示模式 -->
-          <MarkdownRenderer
-            v-else
-            :content="currentData.top_level_thoughts || ''"
-            class="content-markdown"
-          />
-        </div>
-      </div>
-
-      <!-- 研究计划（子问题列表） -->
-      <div class="content-column research-plan-column">
-        <div class="column-header">研究计划</div>
-        <div class="column-content">
-          <!-- 条件问题列表 -->
-          <div class="problem-list-section">
-            <div class="problem-list-header">
-              <span class="section-title">条件问题</span>
-              <el-button
-                v-if="isEditing"
-                size="small"
-                type="primary"
-                @click="addConditionalProblem"
-              >
-                <el-icon><Plus /></el-icon>
-                添加条件问题
-              </el-button>
-            </div>
-            <div class="problem-list">
-              <ProblemElement
-                v-for="(problem, index) in conditionalProblems"
-                :key="problem.id || `conditional-${index}`"
-                :problem-data="problem"
-                :is-editable="isEditing"
-                :can-move-up="index > 0"
-                :can-move-down="index < conditionalProblems.length - 1"
-                @save="handleProblemSave(problem, $event)"
-                @move-up="handleProblemMoveUp(problem, 'conditional')"
-                @move-down="handleProblemMoveDown(problem, 'conditional')"
-                @delete="handleProblemDelete(problem, 'conditional')"
-              />
-              <div v-if="conditionalProblems.length === 0" class="empty-list">
-                暂无条件问题
-              </div>
-            </div>
-          </div>
-
-          <!-- 实施问题列表 -->
-          <div class="problem-list-section">
-            <div class="problem-list-header">
-              <span class="section-title">实施问题</span>
-              <el-button
-                v-if="isEditing"
-                size="small"
-                type="primary"
-                @click="addImplementationProblem"
-              >
-                <el-icon><Plus /></el-icon>
-                添加实施问题
-              </el-button>
-            </div>
-            <div class="problem-list">
-              <ProblemElement
-                v-for="(problem, index) in implementationProblems"
-                :key="problem.id || `implementation-${index}`"
-                :problem-data="problem"
-                :is-editable="isEditing"
-                :can-move-up="index > 0"
-                :can-move-down="index < implementationProblems.length - 1"
-                @save="handleProblemSave(problem, $event)"
-                @move-up="handleProblemMoveUp(problem, 'implementation')"
-                @move-down="handleProblemMoveDown(problem, 'implementation')"
-                @delete="handleProblemDelete(problem, 'implementation')"
-              />
-              <div v-if="implementationProblems.length === 0" class="empty-list">
-                暂无实施问题
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 收尾工作计划 -->
-      <div class="content-column">
-        <div class="column-header">收尾工作计划</div>
-        <div class="column-content">
-          <!-- 编辑模式 -->
-          <el-input
-            v-if="isEditing"
-            v-model="localData.implementation_plan"
-            type="textarea"
-            :rows="12"
-            placeholder="请描述收尾工作计划"
-            class="content-textarea"
-          />
-          <!-- 展示模式 -->
-          <MarkdownRenderer
-            v-else
-            :content="currentData.implementation_plan || ''"
-            class="content-markdown"
-          />
-        </div>
-      </div>
-
-      <!-- 可行性论证 -->
-      <div class="content-column">
-        <div class="column-header">可行性论证</div>
-        <div class="column-content">
-          <!-- 编辑模式 -->
-          <el-input
-            v-if="isEditing"
-            v-model="localData.plan_justification"
-            type="textarea"
-            :rows="12"
-            placeholder="请描述可行性论证"
-            class="content-textarea"
-          />
-          <!-- 展示模式 -->
-          <MarkdownRenderer
-            v-else
-            :content="currentData.plan_justification || ''"
-            class="content-markdown"
-          />
-        </div>
-      </div>
-    </div>
     </div>
   </div>
 </template>
 
 <script>
 import { ElButton, ElInput, ElTag, ElSwitch, ElIcon, ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, ChatSquare } from '@element-plus/icons-vue'
 import MarkdownRenderer from '@/components/message/MarkdownRenderer.vue'
 import ProblemElement from './ProblemElement.vue'
 import { useTreeStore } from '@/stores/treeStore'
@@ -261,7 +287,8 @@ export default {
     ElIcon,
     MarkdownRenderer,
     ProblemElement,
-    Plus
+    Plus,
+    ChatSquare
   },
 
   props: {
@@ -301,7 +328,11 @@ export default {
       
       // 原始数据备份
       originalData: null,
-      originalChildren: []
+      originalChildren: [],
+
+      // 消息输入相关
+      messageContent: '',
+      isSendingMessage: false,
     }
   },
 
@@ -376,6 +407,19 @@ export default {
     // 实施问题列表
     implementationProblems() {
       return this.localChildren.filter(child => child.problem_type === 'implementation')
+    },
+
+    // 消息输入框占位符
+    messagePlaceholder() {
+      if (!this.currentData.id) return '无法发送消息'
+      return `向${this.treeStore?.getAgentNameByNodeId(this.currentData.id)}发送消息`
+    },
+
+    // 消息输入是否禁用
+    isMessageInputDisabled() {
+      // 如果当前节点没有ID，或者节点未启用，则禁用消息输入
+      if (!this.currentData.id) return true;
+      return this.treeStore?.getIsNodeEnabled(this.currentData.id) !== true;
     }
   },
 
@@ -686,7 +730,14 @@ export default {
         criteria: '',
         problem_type: 'conditional'
       }
-      this.localChildren.push(newProblem)
+      // 找到第一个实施问题的位置，将条件问题插入到它之前
+      const firstImplementationIndex = this.localChildren.findIndex(p => p.problem_type === 'implementation')
+      if (firstImplementationIndex !== -1) {
+        this.localChildren.splice(firstImplementationIndex, 0, newProblem)
+      } else {
+        // 如果没有实施问题，直接添加到列表末尾
+        this.localChildren.push(newProblem)
+      }
     },
 
     // 添加实施问题
@@ -698,6 +749,7 @@ export default {
         criteria: '',
         problem_type: 'implementation'
       }
+      // 实施问题直接添加到列表末尾
       this.localChildren.push(newProblem)
     },
 
@@ -756,6 +808,29 @@ export default {
       if (index !== -1) {
         this.localChildren.splice(index, 1)
       }
+    },
+
+    // 发送消息
+    async handleSendMessage() {
+      if (!this.messageContent.trim() || this.isSendingMessage) {
+        ElMessage.warning('请输入消息内容')
+        return
+      }
+
+      this.isSendingMessage = true // 发送前短暂设置为true，禁用按钮
+      try {
+        await this.messageStore.sendMessage(
+          this.messageContent.trim(),
+          "用户消息",
+          "user_chat_agent",
+          { solution_id: this.currentData.id }
+        )
+        ElMessage.success('消息发送成功')
+        this.handleClose() // 发送前关闭面板
+      } catch (error) {
+        console.error('发送消息失败:', error)
+        ElMessage.error('发送消息失败')
+      }
     }
   }
 }
@@ -807,10 +882,17 @@ export default {
   border-bottom: 1px solid var(--border-color, #dcdfe6);
   background: var(--bg-color-light, #f5f7fa);
   border-radius: 12px 12px 0 0;
+  /* 标题与操作区域并排，标题区域可换行时自动增高 */
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 24px;
+  row-gap: 8px;
 }
 
 .header-title {
-  margin-bottom: 16px;
+  /* 限制标题列在栅格中可收缩，避免挤压右侧控件 */
+  min-width: 0;
 }
 
 .title-input {
@@ -823,13 +905,18 @@ export default {
   font-size: 24px;
   font-weight: 600;
   color: var(--text-color, #303133);
+  /* 长中文/连续字符也能优雅换行，撑高头部不溢出 */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .header-actions {
   display: flex;
-  align-items: center;
-  gap: 24px;
+  align-items: flex-start;
+  gap: 16px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .status-section {
@@ -851,12 +938,35 @@ export default {
 .action-buttons {
   display: flex;
   gap: 12px;
-  margin-left: auto;
+  /* 栅格布局下不再需要自动占位推到右侧 */
+  margin-left: 0;
+}
+
+/* 消息输入区域 */
+.message-input-area {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color, #dcdfe6);
+  background: var(--bg-color-light, #f5f7fa);
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0; /* 防止被压缩 */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-input {
+  flex: 1;
+}
+
+.el-button.is-circle {
+  border-radius: 50%;
+  padding: 8px; /* Adjust padding for circular button */
 }
 
 /* 主内容区域 */
 .panel-content {
   flex: 1;
+  min-height: 0; /* 允许内容区在父 flex 容器中收缩，给头部让位 */
   display: grid;
   grid-template-columns: 1fr 1.2fr 1fr 1fr;
   gap: 1px;
@@ -1016,6 +1126,11 @@ export default {
 }
 
 :root[data-theme="dark"] .content-markdown {
+  background: var(--bg-color-darker, #2d2d2d);
+  border-color: var(--border-color-dark, #414243);
+}
+
+:root[data-theme="dark"] .message-input-area {
   background: var(--bg-color-darker, #2d2d2d);
   border-color: var(--border-color-dark, #414243);
 }

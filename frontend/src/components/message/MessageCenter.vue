@@ -51,7 +51,7 @@
     <div class="input-area">
       <ChatInput
         v-model="inputContent"
-        :disabled="isGenerating"
+        :disabled="isGenerating || !canSendMessage"
         :is-loading="isGenerating"
         @send="handleSendMessage"
       />
@@ -154,10 +154,8 @@ export default {
     
     // 检查是否可以发送消息
     canSendMessage() {
-      return this.selectedAgent &&
-             this.selectedNodeTitle &&
-             this.inputContent.trim() &&
-             !this.isGenerating
+      // 必须选择智能体和节点，且输入内容不为空，并且当前不在生成状态
+      return this.selectedAgent && this.selectedNodeTitle && this.inputContent.trim();
     }
   },
   

@@ -73,9 +73,9 @@
                 <el-dropdown-menu>
                   <el-dropdown-item
                     command="sync-messages"
-                    :icon="Refresh"
                     :disabled="getIsGenerating"
                   >
+                    <el-icon><Refresh /></el-icon>
                     同步消息
                   </el-dropdown-item>
                 </el-dropdown-menu>
@@ -114,8 +114,8 @@
 <script>
 import { ElMessage } from 'element-plus'
 import { 
-  ArrowLeft, ArrowRight, Camera, ChatDotRound, More, Refresh, Delete,
-  Connection, Loading, Check
+  ArrowLeft, ArrowRight, Camera, ChatDotRound, More, Delete,
+  Connection, Loading, Check, Refresh
 } from '@element-plus/icons-vue'
 import AppHeader from './components/shared/AppHeader.vue'
 import ProjectManager from './components/project/ProjectManager.vue'
@@ -138,11 +138,11 @@ export default {
     Camera,
     ChatDotRound,
     More,
-    Refresh,
     Delete,
     Connection,
     Loading,
-    Check
+    Check,
+    Refresh
   },
   
   data() {

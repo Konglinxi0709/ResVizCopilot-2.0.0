@@ -266,6 +266,14 @@ export class ResearchTreeTransformer {
       return null
     }
     
+    // 如果启用了隐藏弃用节点，且当前节点是弃用的，则跳过
+    if (context.hideDeprecatedNodes && context.snapshotData) {
+      const isNodeEnabled = this.isNodeInSelectedPath(context.snapshotData.roots, node.id)
+      if (isNodeEnabled === false) {
+        return null // 跳过弃用节点
+      }
+    }
+    
     // 创建符合Mind-elixir要求的节点结构
     const mindElixirNode = {
       id: node.id,

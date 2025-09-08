@@ -478,10 +478,15 @@ export default {
   border-bottom: 1px solid var(--border-color, #dcdfe6);
   background: var(--bg-color-light, #f5f7fa);
   border-radius: 12px 12px 0 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 24px;
+  row-gap: 8px;
 }
 
 .header-title {
-  margin-bottom: 16px;
+  min-width: 0;
 }
 
 .title-input {
@@ -494,13 +499,17 @@ export default {
   font-size: 24px;
   font-weight: 600;
   color: var(--text-color, #303133);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .header-actions {
   display: flex;
-  align-items: center;
-  gap: 24px;
+  align-items: flex-start;
+  gap: 16px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .status-section {
@@ -517,12 +526,13 @@ export default {
 .action-buttons {
   display: flex;
   gap: 12px;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 /* 主内容区域 */
 .panel-content {
   flex: 1;
+  min-height: 0; /* 允许内容区在父 flex 容器中收缩，给头部让位 */
   display: grid;
   grid-template-columns: 1fr 1fr; /* 两列布局 */
   gap: 1px;

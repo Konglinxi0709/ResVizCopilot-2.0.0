@@ -13,6 +13,9 @@ export const useTreeStore = defineStore('tree', {
     // 智能体正在操作的节点ID（为空值代表智能体不在执行，为"-"代表当前正在传输系统消息）
     agentOperatingNodeId: null,
 
+    // 是否隐藏所有弃用节点
+    hideDeprecatedNodes: false,
+
     // 加载状态
     isLoading: false,
 
@@ -52,7 +55,8 @@ export const useTreeStore = defineStore('tree', {
         const transformer = new ResearchTreeTransformer()
         const context = {
           isSnapshotView: isSnapshotView,
-          agentOperatingNodeId: state.agentOperatingNodeId
+          agentOperatingNodeId: state.agentOperatingNodeId,
+          hideDeprecatedNodes: state.hideDeprecatedNodes
         }
         return transformer.transformToMindElixir(snapshotData, context)
       } catch (error) {
@@ -379,6 +383,32 @@ export const useTreeStore = defineStore('tree', {
     },
 
     /**
+     * 根据问题ID获取子问题面板所需数据
+     * @param {string} problemId - 问题ID
+     * @returns {Object|null} 问题数据
+     */
+    getSubProblemPanelData: (state) => (problemId) => {
+      if (!problemId || !state.currentSnapshot) return null
+
+      const problemNode = useTreeStore()._findNodeById(state.currentSnapshot.roots, problemId)
+      if (!problemNode || problemNode.type !== "problem") {
+        return null
+      }
+      
+      const parentSolutionId = useTreeStore().getParentSolutionId(problemId);
+
+      return {
+        id: problemNode.id,
+        title: problemNode.title,
+        significance: problemNode.significance,
+        criteria: problemNode.criteria,
+        problem_type: problemNode.problem_type,
+        parentSolutionId: parentSolutionId, // 添加父解决方案ID
+        problemTitle: problemNode.title, // 添加问题自身的标题
+      }
+    },
+
+    /**
      * 判断节点是否启用（只有在被选中的解决方案路径上的节点才被认为是启用的）
      * @param {string} nodeId - 节点ID
      * @returns {boolean} 节点是否启用
@@ -391,9 +421,32 @@ export const useTreeStore = defineStore('tree', {
     },
 
     /**
+     * 获取是否隐藏弃用节点的状态
+     */
+    getHideDeprecatedNodes: (state) => state.hideDeprecatedNodes,
+
+    /**
      * 返回加载状态
      */
-    getIsLoading: (state) => state.isLoading
+    getIsLoading: (state) => state.isLoading,
+
+    /**
+     * 根据问题ID获取父解决方案ID
+     * @param {string} problemId - 问题ID
+     * @returns {string|null} 父解决方案ID，如果不存在则返回null
+     */
+    getParentSolutionId: (state) => (problemId) => {
+      if (!problemId || !state.currentSnapshot) return null;
+
+      const parentNodeId = useTreeStore()._findParentNodeId(state.currentSnapshot.roots, problemId);
+      if (parentNodeId) {
+        const parentNode = useTreeStore()._findNodeById(state.currentSnapshot.roots, parentNodeId);
+        if (parentNode && parentNode.type === 'solution') {
+          return parentNode.id;
+        }
+      }
+      return null;
+    }
   },
 
   actions: {
@@ -674,6 +727,14 @@ export const useTreeStore = defineStore('tree', {
         }
       }
       return null // 没有找到目标节点
+    },
+
+    /**
+     * 设置是否隐藏弃用节点
+     * @param {boolean} hide - 是否隐藏弃用节点
+     */
+    setHideDeprecatedNodes(hide) {
+      this.hideDeprecatedNodes = hide
     },
 
     /**

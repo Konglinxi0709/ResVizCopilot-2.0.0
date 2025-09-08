@@ -140,11 +140,11 @@ export default {
     },
     
     handleKeydown(event) {
-      // Ctrl+Enter 或 Cmd+Enter 发送
-      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        event.preventDefault()
+      // Enter 键发送消息，Shift + Enter 换行
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault(); // 阻止默认的回车换行行为
         if (this.canSend) {
-          this.handleSend()
+          this.handleSend();
         }
       }
     },

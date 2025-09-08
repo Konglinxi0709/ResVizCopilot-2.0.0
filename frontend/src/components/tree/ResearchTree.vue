@@ -37,6 +37,16 @@
       </el-card>
     </div>
 
+    <!-- 弃用节点隐藏开关 -->
+    <div class="deprecated-toggle">
+      <span class="toggle-text">{{ hideDeprecatedNodes ? '显示' : '隐藏' }}弃用节点</span>
+      <el-switch
+        v-model="hideDeprecatedNodes"
+        @change="handleToggleDeprecatedNodes"
+        size="small"
+      />
+    </div>
+
     <!-- 解决方案面板 -->
     <SolutionPanel
       v-if="shouldShowSolutionPanel"
@@ -51,6 +61,13 @@
       @close="handleClosePanel"
     />
 
+    <!-- 子问题展示面板 -->
+    <SubProblemPanel
+      v-if="shouldShowSubProblemPanel"
+      :selected-node-id="selectedNodeId"
+      @close="handleClosePanel"
+    />
+
   </div>
 </template>
 
@@ -58,10 +75,11 @@
 import MindElixirWrapper from './MindElixirWrapper.vue'
 import SolutionPanel from './SolutionPanel.vue'
 import RootProblemPanel from './RootProblemPanel.vue'
+import SubProblemPanel from './SubProblemPanel.vue' // Added import for SubProblemPanel
 import { useTreeStore } from '@/stores/treeStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { Camera, Loading } from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessageBox, ElSwitch } from 'element-plus'
 
 export default {
   name: 'ResearchTree',
@@ -70,8 +88,10 @@ export default {
     MindElixirWrapper,
     SolutionPanel,
     RootProblemPanel,
+    SubProblemPanel, // Added SubProblemPanel to components
     Camera,
-    Loading
+    Loading,
+    ElSwitch
   },
   
   
@@ -81,6 +101,7 @@ export default {
       selectedNodeId: null,
       shouldShowSolutionPanel: false, // 控制解决方案面板显示
       shouldShowRootProblemPanel: false, // 控制根问题面板显示
+      shouldShowSubProblemPanel: false, // 控制子问题面板显示
     }
   },
   
@@ -103,6 +124,16 @@ export default {
       return this.treeStore?.getDisplaySnapshotData
     },
 
+    // 是否隐藏弃用节点
+    hideDeprecatedNodes: {
+      get() {
+        return !(this.treeStore?.getHideDeprecatedNodes || false)
+      },
+      set(value) {
+        this.treeStore?.setHideDeprecatedNodes(!value)
+      }
+    },
+
   },
 
   async mounted() {
@@ -119,6 +150,7 @@ export default {
       // 重置所有面板状态
       this.shouldShowSolutionPanel = false
       this.shouldShowRootProblemPanel = false
+      this.shouldShowSubProblemPanel = false
       this.selectedNodeId = nodeId
       
       // mind-root节点：创建根问题
@@ -133,21 +165,20 @@ export default {
         return
       }
       
-      // 其他节点：检查是否显示解决方案面板
-      this.checkSolutionPanelDisplay(nodeId)
-    },
-
-    // 检查是否显示解决方案面板
-    checkSolutionPanelDisplay(nodeId) {
+      // 其他问题节点（非根问题）
       const nodeType = this.treeStore.getNodeType(nodeId)
-      if (nodeType === 'solution') {
-        this.shouldShowSolutionPanel = true
-      } else if (nodeType === 'problem') {
+      if (nodeType === 'problem') {
         const problemType = this.treeStore.getProblemNodeType(nodeId)
         if (problemType === 'implementation' && this.treeStore.getIsNodeEnabled(nodeId) === true) {
-          this.shouldShowSolutionPanel = true
+          // 实施问题：弹出对话框选择创建解决方案或查看问题
+          await this.handleImplementationProblemSelect()
+        } else {
+          // 条件问题：直接打开子问题展示面板
+          this.shouldShowSubProblemPanel = true
         }
-        // 条件问题不显示任何面板
+      } else if (nodeType === 'solution') {
+        // 解决方案：直接打开解决方案面板
+        this.shouldShowSolutionPanel = true
       }
     },
 
@@ -179,17 +210,53 @@ export default {
       }
     },
 
+    // 处理实施问题节点选择
+    async handleImplementationProblemSelect() {
+      try {
+        // eslint-disable-next-line no-unused-vars
+        const choice = await ElMessageBox.confirm(
+          '请选择您要执行的操作：',
+          '实施问题操作',
+          {
+            distinguishCancelAndClose: true,
+            confirmButtonText: '新建解决方案',
+            cancelButtonText: '查看问题',
+            type: 'info',
+            customClass: 'implementation-problem-dialog'
+          }
+        )
+
+        // 用户选择了新建解决方案
+        this.shouldShowSolutionPanel = true
+
+      } catch (action) {
+        if (action === 'cancel') {
+          // 用户选择了查看问题
+          this.shouldShowSubProblemPanel = true
+        }
+        // action === 'close' 表示用户关闭了对话框，不做任何操作
+      }
+    },
+
     // 处理关闭面板
     handleClosePanel() {
       this.selectedNodeId = null
       this.shouldShowSolutionPanel = false
       this.shouldShowRootProblemPanel = false
+      this.shouldShowSubProblemPanel = false // Close sub-problem panel
     },
 
     // 处理退出快照查看
     handleExitSnapshotView() {
       console.log('退出快照查看模式')
       this.treeStore.exitSnapshotView()
+    },
+
+    // 处理隐藏弃用节点开关变化
+    handleToggleDeprecatedNodes(value) {
+      console.log(`${value ? '隐藏' : '显示'}弃用节点`)
+      // v-model 已经自动更新了 treeStore 中的值
+      // 这里可以添加额外的逻辑，比如记录用户偏好等
     }
   }
 }
@@ -257,14 +324,31 @@ export default {
   z-index: 1000;
 }
 
-.agent-card {
+/* 弃用节点隐藏开关 */
+.deprecated-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.agent-card,
+.toggle-card {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
   border: 1px solid #e4e7ed;
 }
 
-.agent-content {
+.agent-content,
+.toggle-content {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -279,7 +363,8 @@ export default {
   animation: rotating 2s linear infinite;
 }
 
-.agent-text {
+.agent-text,
+.toggle-text {
   font-weight: 500;
   color: #303133;
 }
@@ -300,10 +385,15 @@ export default {
   }
 
   .snapshot-indicator,
-  .agent-indicator {
+  .agent-indicator,
+  .deprecated-toggle {
     top: 10px;
     left: 10px;
     right: 10px;
+  }
+  
+  .deprecated-toggle {
+    top: 70px; /* 在移动端放在下方，避免重叠 */
   }
 
   .snapshot-content,
@@ -320,7 +410,8 @@ export default {
 
 /* 深色主题适配 */
 :root[data-theme="dark"] .snapshot-card,
-:root[data-theme="dark"] .agent-card {
+:root[data-theme="dark"] .agent-card,
+:root[data-theme="dark"] .toggle-card {
   background: rgba(45, 45, 45, 0.95);
   border-color: #4c4d4f;
   color: #e4e7ed;
