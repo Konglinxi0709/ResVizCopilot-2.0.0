@@ -22,10 +22,10 @@ from backend.database.schemas.research_tree import ProblemType
 # 验证器模型
 class HandleModificationRequestsResponse(BaseModel):
     """修改请求处理响应验证器"""
-    decision: Literal["accept", "reply"] = Field(description="决策类型：accept表示同意修改，reply表示回复用户")
+    decision: Literal["accept", "reply"] = Field(description="决策类型：accept表示同意修改，reply表示回复对方")
     reasoning: str = Field(description="决策理由，不超过100字")
     modification_plan: Optional[str] = Field(default=None, description="修改计划，仅在decision为accept时提供，不超过300字")
-    response_to_user: Optional[str] = Field(default=None, description="对用户的回复，仅在decision为reply时提供")
+    response_to_user: Optional[str] = Field(default=None, description="对对方的回复，仅在decision为reply时提供")
     
     @model_validator(mode='before')
     @classmethod
@@ -97,17 +97,17 @@ class HandleModificationRequestsResponse(BaseModel):
     @field_validator('response_to_user')
     @classmethod
     def validate_response_to_user(cls, v, info):
-        """验证对用户回复字段"""
+        """验证对对方回复字段"""
         decision = info.data.get('decision') if info.data else None
         
         if decision == "reply":
             if not v or len(v.strip()) == 0:
-                raise ValueError('当决策为reply时，必须提供对用户的回复')
+                raise ValueError('当决策为reply时，必须提供对对方的回复')
             return v.strip()
         else:
             # 当decision为accept时，response_to_user应该为None
             if v is not None and len(v.strip()) > 0:
-                raise ValueError('当决策为accept时，不应提供对用户的回复')
+                raise ValueError('当决策为accept时，不应提供对对方的回复')
             return None
     
     @field_validator('decision')
@@ -124,38 +124,38 @@ class HandleModificationRequestsResponse(BaseModel):
                    f"【修改计划】: {self.modification_plan}\n"
         else:
             return f"【做出回复的理由】: {self.reasoning}\n" \
-                   f"【对用户的回复】: {self.response_to_user}\n"
+                   f"【回复信息】: {self.response_to_user}\n"
 
 
 HANDLE_MODIFICATION_REQUESTS_PROMPT = f"""
 {ROLE_AND_RULES}
 <task>
-现在{{supervisor_name}}对你的解决方案提出了疑问或修改要求，你需要理解这些疑问或修改要求，并决定按要求修改还是回复他，大致包含以下几步。
+现在{{supervisor_name}}就你的解决方案向你发送了信息，你需要根据他的消息中是否包含“请修改”，并且根据他要求的合理性回复他或者按他的要求修改你的解决方案，大致包含以下几步。
 1. 接收信息：
     1. 理解当前的完整研究过程，了解团队的研究目标和已经进行过的思考和求证，并掌握其中得到的所有事实结论
     2. 理解你自己的研究方案，这代表着你之前的工作思路
-    3. 理解你和用户间的对话，了解用户修改要求背后的思考
-2. 分析用户的要求，是只希望你回答问题，或是希望你修改解决方案中的思路或论述，还是希望你修改实际的方案计划
-    0. 当且仅当用户的消息中存在“请修改”三个字，应视为要求修改，否则都视为希望你回复它。如果用户的消息极其像一个明确的修改要求，但不包含这三个字，你应该回复他，告诉他你需要更明确的要求才能修改。
-    1. 如果用户希望你回答问题，你需要理解他的问题及背后的考虑，并回复他。除非用户明确要求直接修改，否则我建议你先多次回复用户，将所有细节讨论清楚且用户确认之后再做修改。
-    2. 如果用户希望你修改思路或论述等，你需要判断这样修改后表达是否更准确，且是否与方案的其它部分保持思维统一。
+    3. 理解你和对方间的对话，了解对方修改要求背后的思考
+2. 判断用对方消息中是否严格包含“请修改”三个字，如果没有的话则说明你**必须**直接回复他，否则说明你需要考虑是否按对方的要求修改你的解决方案。
+    1. 如果不包含“请修改”，你需要理解他的问题及背后的考虑，并回复他。
+        1. 如果对方的消息极其像一个明确的修改要求，但不包含这三个字，你也应该回复他，告诉他你需要明确的“请修改”要求才能修改，并且详细说明你认为可能需要修改的原因。
+    2. 如果包含，且对方希望你修改思路或论述等，你需要判断这样修改后表达是否更准确，且是否与方案的其它部分保持思维统一。
         1. 如果修改后表达更准确，且与方案的其它部分保持思维统一，你需要制定修改计划，指导你的下一步修改工作。
         2. 如果修改后表达不准确，或与方案的其它部分不保持思维统一，你需要回复他，确认是否有更好的表达，或者是否要连同其他方案计划等部分一起修改。
-    3. 如果用户希望你修改实际的方案计划，你需要分析用户的修改要求是否合理，是否存在问题
+    3. 如果包含，且对方希望你修改实际的方案计划，你需要分析对方的修改要求是否合理，是否存在问题
         1. 站在你之前的思路上，思考你当时没有考虑这种选择的原因，是因为这种选择确实很好只是你当时没有考虑到，还是因为你考虑到了但认为这种选择本身存在问题
         2. 如果按要求进行修改，是否比当前的解决方案更容易实施或能实现更大的研究价值
 </task>
 <specifications>
 <descion>
 <what>
-你的决定。accept表示同意修改，reply表示回复用户。
+你的决定。accept表示同意修改，reply表示回复对方。
 <reasoning>
 你的决策理由。不超过100字。
 </reasoning>
 <if type="accept">
 <modification_plan>
 为你准备如何修改做一个简要的计划，用来指导你自己之后的修改工作。不超过300字。
-你的修改计划必须综合之前对话中用户所有的修改要求，列出修改清单，不要遗漏用户的任何一个没有撤销或否决的意见。
+你的修改计划必须综合之前对话中对方所有的修改要求，列出修改清单，不要遗漏对方的任何一个没有撤销或否决的意见。
 </modification_plan>
 </if>
 <if type="reply">
@@ -178,7 +178,7 @@ HANDLE_MODIFICATION_REQUESTS_PROMPT = f"""
 <modification_plan>修改计划</modification_plan>
 </if>
 <if type="reply">
-<response_to_user>对用户的回复</response_to_user>
+<response_to_user>对对方的回复</response_to_user>
 </if>
 </decision>
 </response>
